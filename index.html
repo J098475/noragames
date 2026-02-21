@@ -70,7 +70,7 @@ canvas {
     <div class="med">
       Help Gus the Persian cat find his treat!<br>
       Jump over furniture &bull; Crawl under low objects<br>
-      Land on cat tree shelves for a speed boost<br>
+      &#x1F41F; Fish = speed boost &bull; &#x1F9F6; Yarn = extra life!<br>
       Avoid the stinky litter boxes!
     </div>
     <div class="sml">Arrow keys / WASD &bull; Z or UP to jump &bull; DOWN to crawl</div>
@@ -105,6 +105,7 @@ const sfxStep  = () => beep(80,'square',0.04,0.05);
 const sfxHurt  = () => { beep(160,'sawtooth',0.09,0.15,0,70); beep(70,'sawtooth',0.13,0.1,0.09); };
 const sfxBoost = () => beep(440,'sawtooth',0.07,0.1,0,700);
 const sfxWin   = () => [523,659,784,880,1047,1319].forEach((f,i)=>beep(f,'square',0.13,0.13,i*0.1));
+const sfxLife  = () => { beep(784,'square',0.07,0.13,0); beep(1047,'square',0.1,0.15,0.08); beep(1319,'square',0.18,0.17,0.17); };
 function sfxTreat() {
   // Ta-da! fanfare
   beep(523,'square',0.07,0.16,0.00);
@@ -151,17 +152,31 @@ let frame=0, stepT=0;
 let keys={}, parts=[], cam={x:0};
 let cfg, lvlW;
 let P={};
+let powerups=[];  // active power-ups
+let popups=[];    // floating text popups
 
 function resetP(sx, sy) {
   P = { x:sx, y:sy-PH_S, vx:0, vy:0, w:PW, h:PH_S,
         onGround:false, wasGround:false, crawling:false,
-        facing:1, af:0, at:0, inv:0, boosted:false };
+        facing:1, af:0, at:0, inv:0, boosted:false, boostTimer:0 };
 }
 
 // ================================================================
 //  LEVEL DATA
 // ================================================================
 const GP = h => GY - h;
+
+const POWERUP_DEFS = [
+  [ // Level 1
+    { x:480,  y:GP(44), type:'speed' },
+    { x:1160, y:GP(36), type:'life'  },
+  ],
+  [ // Level 2
+    { x:620,  y:GP(70), type:'speed' },
+    { x:1310, y:GP(36), type:'life'  },
+    { x:1780, y:GP(36), type:'speed' },
+  ],
+];
 
 const LEVELS = [
   // ── LEVEL 1: Living Room ──────────────────────────────────────
@@ -260,6 +275,29 @@ function update() {
   P.at++; if (P.at>8){ P.at=0; P.af=(P.af+1)%4; }
   if (P.inv>0) P.inv--;
 
+  if(P.boosted && P.boostTimer>0){ P.boostTimer--; if(P.boostTimer<=0){P.boosted=false;} }
+
+  popups=popups.filter(p=>p.life>0);
+  popups.forEach(p=>{p.y-=0.6;p.life--;});
+
+  for(const pu of powerups){
+    if(pu.collected) continue;
+    if(hits(P.x,P.y,P.w,P.h,pu.x,pu.y,24,24)){
+      pu.collected=true;
+      if(pu.type==='speed'){
+        P.boosted=true; P.boostTimer=180;
+        burst(P.x+P.w/2,P.y+P.h/2,'#44aaff',16);
+        popups.push({x:pu.x,y:pu.y-10,text:'SPEEDY!',color:'#44aaff',life:80});
+        sfxBoost(); score+=50; updateHUD();
+      } else {
+        lives=Math.min(lives+1,5);
+        burst(P.x+P.w/2,P.y+P.h/2,'#ff44aa',16);
+        popups.push({x:pu.x,y:pu.y-10,text:'+1 LIFE!',color:'#ff44aa',life:80});
+        sfxLife(); score+=100; updateHUD();
+      }
+    }
+  }
+
   const goL  = keys['ArrowLeft']  || keys['a'];
   const goR  = keys['ArrowRight'] || keys['d'];
   const doJ  = keys['ArrowUp']    || keys['z'] || keys['w'] || keys[' '];
@@ -311,14 +349,23 @@ function update() {
     }
     if (P.vy>=0 && P.y+P.h-P.vy<=r.y+6){
       P.y=r.y-P.h; P.vy=0; P.onGround=true;
-      if(!P.wasGround) sfxLand();
-      if(r.type==='shelf' && !P.boosted){ P.boosted=true; sfxBoost(); score+=10; updateHUD(); burst(P.x+P.w/2,P.y+P.h,'#ff8800',10); }
-      if(r.type!=='shelf') P.boosted=false;
+      // Only fire landing effects on the FIRST frame of contact
+      if(!P.wasGround){
+        sfxLand();
+        // Shelf gives a one-time speed boost on landing
+        if(r.type==='shelf'){
+          P.boosted=true; P.boostTimer=120;
+          sfxBoost(); score+=10; updateHUD();
+          burst(P.x+P.w/2,P.y+P.h,'#ff8800',10);
+        }
+      }
+      // Leaving a shelf (landing elsewhere) clears shelf-sourced boost
+      if(r.type!=='shelf' && P.boostTimer<=120) P.boosted=false;
     } else if (P.vy<0){ P.y=r.y+r.h; P.vy=0; }
   }
 
-  // floor
-  if (P.y+P.h>=GY){ if(!P.wasGround&&P.vy>0)sfxLand(); P.y=GY-P.h; P.vy=0; P.onGround=true; P.boosted=false; }
+  // floor — clear shelf boost, keep fish boost (fish sets boostTimer=180)
+  if (P.y+P.h>=GY){ if(!P.wasGround&&P.vy>0)sfxLand(); P.y=GY-P.h; P.vy=0; P.onGround=true; if(P.boostTimer<=120){P.boosted=false;P.boostTimer=0;} }
 
   // litter hazard
   if (P.inv===0){
@@ -625,6 +672,60 @@ function drawGus(){
 }
 
 // ================================================================
+//  DRAW POWER-UPS
+// ================================================================
+function drawPowerups(){
+  for(const pu of powerups){
+    if(pu.collected) continue;
+    const px2=Math.round(pu.x-cam.x), py2=pu.y;
+    const bob=Math.sin(frame*0.09)*3;
+    if(pu.type==='speed'){
+      ctx.save(); ctx.shadowColor='#44aaff'; ctx.shadowBlur=14;
+      r(px2+2,py2+6+bob,18,10,'#5BB8FF');
+      r(px2+4,py2+4+bob,14,14,'#3A9FE8');
+      r(px2+6,py2+6+bob,10,10,'#88CCFF');
+      r(px2,  py2+5+bob, 6, 4,'#3A9FE8');
+      r(px2,  py2+13+bob,6, 4,'#3A9FE8');
+      r(px2+17,py2+8+bob,3,3,'#fff');
+      r(px2+18,py2+9+bob,2,2,'#111');
+      ctx.restore();
+      ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(px2-2,py2-15+bob,42,12);
+      ctx.fillStyle='#44aaff'; ctx.font='bold 7px monospace';
+      ctx.fillText('SPEEDY!',px2,py2-5+bob);
+    } else {
+      ctx.save(); ctx.shadowColor='#ff44aa'; ctx.shadowBlur=14;
+      r(px2+2,py2+2+bob,20,20,'#FF6EC7');
+      r(px2+4,py2+4+bob,16,16,'#FF44AA');
+      r(px2+7,py2+7+bob,10,10,'#FF99DD');
+      ctx.strokeStyle='#FF99DD'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(px2+3,py2+6+bob); ctx.lineTo(px2+20,py2+18+bob); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px2+20,py2+6+bob); ctx.lineTo(px2+3,py2+18+bob); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px2+12,py2+2+bob); ctx.lineTo(px2+12,py2+22+bob); ctx.stroke();
+      ctx.strokeStyle='#FF44AA'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(px2+22,py2+8+bob); ctx.lineTo(px2+28,py2+4+bob); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(px2-2,py2-15+bob,44,12);
+      ctx.fillStyle='#ff44aa'; ctx.font='bold 7px monospace';
+      ctx.fillText('+1 LIFE!',px2,py2-5+bob);
+    }
+  }
+}
+
+// ================================================================
+//  DRAW FLOATING POPUPS
+// ================================================================
+function drawPopups(){
+  for(const p of popups){
+    ctx.globalAlpha=Math.min(1,p.life/30);
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.fillRect(Math.round(p.x-cam.x)-2,Math.round(p.y)-10,p.text.length*8+4,14);
+    ctx.fillStyle=p.color; ctx.font='bold 9px monospace';
+    ctx.fillText(p.text,Math.round(p.x-cam.x),Math.round(p.y));
+    ctx.globalAlpha=1;
+  }
+}
+
+// ================================================================
 //  DRAW PARTICLES
 // ================================================================
 function drawParts(){
@@ -644,11 +745,13 @@ function drawHints(){
     const sx2=pl.x-cam.x;
     if(sx2<-150||sx2>W+50) return;
     if(pl.type==='lowfurniture'){
-      ctx.fillStyle='#ffffffcc'; ctx.font='7px monospace';
+      ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(sx(pl.x)+pl.w/2-26,pl.y-21,52,14);
+      ctx.fillStyle='#FFE44A'; ctx.font='bold 7px monospace';
       ctx.fillText('\u2193 CRAWL',sx(pl.x)+pl.w/2-22,pl.y-9);
     }
     if(pl.type==='shelf'){
-      ctx.fillStyle='#ffcc00bb'; ctx.font='6px monospace';
+      ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(sx(pl.x)+pl.w/2-18,pl.y-21,38,14);
+      ctx.fillStyle='#ff8800'; ctx.font='bold 6px monospace';
       ctx.fillText('BOOST!',sx(pl.x)+pl.w/2-14,pl.y-9);
     }
   });
@@ -656,7 +759,8 @@ function drawHints(){
 function drawArrow(){
   const tx=cfg.treat.x+14-cam.x;
   if(tx>10&&tx<W-10) return;
-  ctx.fillStyle='#ffcc00'; ctx.font='bold 11px monospace';
+  ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(W/2-44,8,90,18);
+  ctx.fillStyle='#FFE44A'; ctx.font='bold 11px monospace';
   ctx.fillText((tx>W/2?'\u25BA':'\u25C4')+' TREAT',W/2-36,22);
 }
 
@@ -666,20 +770,28 @@ function drawArrow(){
 function draw(){
   ctx.clearRect(0,0,W,H);
   drawBG();
-  // HUD drawn on canvas — never gets clipped
-  ctx.fillStyle='#ffcc00';
+  // HUD — dark strip for readability
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.fillRect(0,0,W,24);
+  ctx.fillStyle='#FFE44A';
   ctx.font='bold 11px monospace';
-  ctx.fillText('LIVES: '+'\u2665'.repeat(Math.max(0,lives)), 10, 18);
-  ctx.fillText('SCORE: '+score, W/2-50, 18);
-  ctx.fillText('LEVEL: '+lvlNum, W-90, 18);
+  ctx.fillText('LIVES: '+'\u2665'.repeat(Math.max(0,lives)), 8, 16);
+  ctx.fillText('SCORE: '+score, W/2-48, 16);
+  ctx.fillText('LEVEL: '+lvlNum, W-88, 16);
+  if(P.boosted){
+    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(0,24,W,4);
+    ctx.fillStyle='#ff8800'; ctx.fillRect(0,24,W*(P.boostTimer/180),4);
+  }
   cfg.platforms.forEach(pl=>{ if(pl.x-cam.x<W+200&&pl.x+pl.w-cam.x>-200) drawPlat(pl); });
   cfg.litterboxes.forEach(lb=>{ if(lb.x-cam.x<W+80&&lb.x+lb.w-cam.x>-80) drawLitter(lb); });
   const tr=cfg.treat;
   if(tr.x-cam.x>-40&&tr.x-cam.x<W+40) drawTreat(tr);
+  drawPowerups();
   drawParts();
   drawGus();
   drawHints();
   drawArrow();
+  drawPopups();
 }
 
 // ================================================================
@@ -703,6 +815,8 @@ function ovCb(){
 
 function startLevel(){
   cfg=LEVELS[lvlNum-1]; lvlW=cfg.width; parts=[];
+  powerups=POWERUP_DEFS[lvlNum-1].map(def=>Object.assign({},def,{collected:false}));
+  popups=[];
   resetP(cfg.playerStart.x,cfg.playerStart.y);
   gs='playing'; updateHUD();
 }
