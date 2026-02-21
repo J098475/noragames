@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Treat Quest: A Cat's Adventure</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a0a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Press Start 2P', monospace;
+    color: #fff;
+    overflow: hidden;
+  }
+  h1 {
+    font-size: 13px;
+    color: #ffcc00;
+    text-shadow: 2px 2px #ff6600, 4px 4px #1a0a2e;
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+  }
+  #hud {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 6px;
+    font-size: 9px;
+    color: #ffcc00;
+  }
+  #gameCanvas {
+    border: 4px solid #ffcc00;
+    box-shadow: 0 0 30px #ff660088, 0 0 60px #ffcc0033;
+    image-rendering: pixelated;
+    display: block;
+  }
+  #controls {
+    margin-top: 8px;
+    font-size: 7px;
+    color: #aaaacc;
+    text-align: center;
+    line-height: 2;
+  }
+  #overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(26,10,46,0.93);
+    font-family: 'Press Start 2P', monospace;
+    z-index: 10;
+  }
+  #overlay h2 { font-size: 18px; color: #ffcc00; text-shadow: 3px 3px #ff6600; margin-bottom: 16px; }
+  #overlay p  { font-size: 8px; color: #fff; margin: 5px 0; line-height: 2; text-align: center; }
+  #overlay .btn {
+    margin-top: 20px;
+    padding: 12px 24px;
+    background: #ffcc00;
+    color: #1a0a2e;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 4px 4px #ff6600;
+  }
+  #overlay .btn:active { transform: translate(2px,2px); box-shadow: 2px 2px #ff6600; }
+  #overlay .icon { font-size: 44px; margin-bottom: 12px; }
+  #soundToggle {
+    position: absolute; top: 8px; right: 10px;
+    font-size: 7px; color: #ffcc00;
+    background: none; border: 1px solid #ffcc0055;
+    padding: 4px 8px; cursor: pointer;
+    font-family: 'Press Start 2P', monospace;
+  }
+</style>
+</head>
+<body>
+
+<h1>&#x1F431; TREAT QUEST &#x1F431;</h1>
+<div id="hud">
+  <span>LIVES: <span id="livesDisplay">&#x2665;&#x2665;&#x2665;</span></span>
+  <span>SCORE: <span id="scoreDisplay">0</span></span>
+  <span>LEVEL: <span id="levelDisplay">1</span></span>
+</div>
+<canvas id="gameCanvas" width="640" height="360"></canvas>
+<div id="controls">
+  &#x2190; &#x2192; MOVE &nbsp;|&nbsp; Z or &#x2191; JUMP &nbsp;|&nbsp; &#x2193; CRAWL under low furniture
+</div>
+
+<div id="overlay">
+  <div class="icon">&#x1F431;</div>
+  <h2>TREAT QUEST</h2>
+  <p>Guide your cat through the house!</p>
+  <p>&#x2B50; Reach the TREAT to complete each level</p>
+  <p>&#x1F43E; Jump on cat trees for a SPEED BOOST</p>
+  <p>&#x2B07; Hold DOWN to crawl under low furniture</p>
+  <p>&#x1F480; Avoid stinky litter boxes!</p>
+  <button class="btn" onclick="startGame()">START GAME</button>
+</div>
+
+<button id="soundToggle" onclick="toggleSound()">&#x1F50A; SFX ON</button>
+
+<script>
+// =====================================================
+//  AUDIO  (Web Audio API — zero external files)
+// =====================================================
+let audioCtx = null;
+let soundEnabled = true;
+
+function getAC() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function tone(freq, type, dur, vol, delay, endFreq) {
+  if (!soundEnabled) return;
+  try {
+    const ac = getAC();
+    const t0 = ac.currentTime + (delay || 0);
+    const osc = ac.createOscillator();
+    const g   = ac.createGain();
+    osc.connect(g); g.connect(ac.destination);
+    osc.type = type || 'square';
+    osc.frequency.setValueAtTime(freq, t0);
+    if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, t0 + dur);
+    g.gain.setValueAtTime(vol || 0.13, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    osc.start(t0); osc.stop(t0 + dur + 0.01);
+  } catch(e) {}
+}
+function sfxJump()   { tone(200,'square',0.12,0.12,0,420); }
+function sfxLand()   { tone(110,'square',0.07,0.09); }
+function sfxHurt()   { tone(160,'sawtooth',0.09,0.15,0,70); tone(70,'sawtooth',0.12,0.1,0.09); }
+function sfxBoost()  { tone(440,'sawtooth',0.07,0.1,0,700); }
+function sfxTreat() {
+  // "Ta-daaaa!" fanfare: quick two-note pickup then a triumphant held chord + run
+  // Pickup: C5-G5 quick
+  tone(523, 'square', 0.07, 0.16, 0.00);
+  tone(784, 'square', 0.07, 0.16, 0.08);
+  // Main hit: C major chord (C5+E5+G5) with a slight delay stagger for fatness
+  tone(523, 'square', 0.40, 0.20, 0.18);
+  tone(659, 'square', 0.40, 0.18, 0.20);
+  tone(784, 'square', 0.40, 0.16, 0.22);
+  // High C sparkle on top
+  tone(1047,'square', 0.35, 0.14, 0.22);
+  // Ascending run after the hit: C5 E5 G5 C6 (bright arpeggio tail)
+  tone(523, 'triangle', 0.10, 0.13, 0.58);
+  tone(659, 'triangle', 0.10, 0.13, 0.68);
+  tone(784, 'triangle', 0.10, 0.13, 0.78);
+  tone(1047,'triangle', 0.20, 0.15, 0.88);
+}
+function sfxStep()   { tone(75,'square',0.04,0.05); }
+function sfxWin()    { [523,659,784,880,1047,1319].forEach((f,i)=>tone(f,'square',0.13,0.13,i*0.1)); }
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  document.getElementById('soundToggle').textContent = soundEnabled ? '\uD83D\uDD0A SFX ON' : '\uD83D\uDD07 SFX OFF';
+}
+
+// =====================================================
+//  CANVAS / CONSTANTS
+// =====================================================
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const GROUND_Y  = H - 48;   // y of top of floor
+const GRAVITY   = 0.62;
+const JUMP_VY   = -13.5;
+const WALK_SPD  = 3.5;
+const BOOST_SPD = 5.5;
+
+// =====================================================
+//  STATE
+// =====================================================
+let gameState = 'menu';
+let score = 0, lives = 3, levelNum = 1;
+let frame = 0;
+let keys  = {};
+let particles = [];
+let cam   = { x: 0 };
+let cfg, levelW;
+let stepTimer = 0;
+
+// =====================================================
+//  PLAYER
+// =====================================================
+const P_W      = 28;
+const P_H_S    = 26;   // standing height
+const P_H_C    = 13;   // crawling height
+let P = {};
+
+function resetPlayer(sx, sy) {
+  P = {
+    x: sx, y: sy - P_H_S,
+    vx: 0, vy: 0,
+    w: P_W, h: P_H_S,
+    onGround: false,
+    wasGround: false,
+    crawling: false,
+    facing: 1,
+    af: 0, at: 0,
+    inv: 0,
+    boosted: false,
+  };
+}
+
+// =====================================================
+//  LEVEL DATA
+// =====================================================
+// GP(h) = y position for something h pixels tall sitting on the ground
+function GP(h) { return GROUND_Y - h; }
+
+const LEVELS = [
+  // ── LEVEL 1: Living Room ────────────────────────────────────────
+  // Path: start → sofa (jump over, 42px) → litter gap →
+  //       coffee table (28px, easy) → cat tree shelves (optional shortcut) →
+  //       LOW DRESSER (crawl, 26px) → short bookshelf (42px, jump) →
+  //       litter gap → scratching post shelf → armchair (jump) → treat
+  {
+    width: 1750,
+    playerStart: { x: 48, y: GROUND_Y },
+    treat: { x: 1670, y: GP(30) },
+    platforms: [
+      // Sofa — 42px tall; max jump height is ~130px so easily clearable
+      { x:190, y:GP(42), w:108, h:42, type:'sofa' },
+
+      // Coffee table — 28px
+      { x:390, y:GP(28), w:80, h:28, type:'table' },
+
+      // Cat tree — decorative post (noCollide), shelves have collision
+      { x:570, y:GP(155), w:34, h:155, type:'cattree', nc:true },
+      { x:549, y:GP(58),  w:76, h:12,  type:'shelf' },   // low
+      { x:537, y:GP(108), w:100,h:12,  type:'shelf' },   // mid
+      { x:549, y:GP(158), w:76, h:12,  type:'shelf' },   // top
+
+      // Low dresser — thin ceiling slab: player must CRAWL (h=13) to fit under
+      // Slab bottom = GP(26)+10 = GROUND_Y-16; player crawl top = GROUND_Y-13 -> 3px gap
+      { x:720, y:GP(26), w:158, h:10, type:'lowfurniture' },
+
+      // Short bookshelf — only 42px, clearly jumpable
+      { x:955, y:GP(42), w:44, h:42, type:'bookshelf' },
+
+      // Scratching post — decor (nc), shelf on top for landing
+      { x:1115, y:GP(88), w:18, h:88, type:'scratchpost', nc:true },
+      { x:1102, y:GP(96), w:44, h:12, type:'shelf' },
+
+      // Armchair — 50px tall
+      { x:1310, y:GP(50), w:98, h:50, type:'armchair' },
+
+      // Small table near treat
+      { x:1490, y:GP(28), w:78, h:28, type:'table' },
+    ],
+    litterboxes: [
+      { x:328, y:GP(24), w:44, h:24 },
+      { x:1050,y:GP(24), w:44, h:24 },  // moved: was 17px after crawl exit, now safe after bookshelf
+      { x:1240,y:GP(24), w:44, h:24 },
+    ],
+  },
+
+  // ── LEVEL 2: Kitchen & Hallway ──────────────────────────────────
+  {
+    width: 2150,
+    playerStart: { x: 48, y: GROUND_Y },
+    treat: { x: 2070, y: GP(30) },
+    platforms: [
+      // Step rug
+      { x:155, y:GP(18), w:80, h:18, type:'table' },
+
+      // Cat tree 1
+      { x:308, y:GP(148), w:34, h:148, type:'cattree', nc:true },
+      { x:287, y:GP(58),  w:76, h:12,  type:'shelf' },
+      { x:275, y:GP(108), w:100,h:12,  type:'shelf' },
+      { x:287, y:GP(158), w:76, h:12,  type:'shelf' },
+
+      // Kitchen counter 1 — 54px; jump onto from cat tree top or just jump
+      { x:470, y:GP(54), w:128, h:54, type:'counter' },
+      // Counter 2 — jump the gap between them
+      { x:660, y:GP(54), w:128, h:54, type:'counter' },
+      // Upper cabinet (reachable from counter top)
+      { x:468, y:GP(116), w:322, h:12, type:'shelf' },
+
+      // Low microwave stand — crawl
+      { x:850, y:GP(26), w:138, h:10, type:'lowfurniture' },
+
+      // Kitchen table
+      { x:1060, y:GP(42), w:108, h:42, type:'table' },
+
+      // Scratching post 2
+      { x:1242, y:GP(96), w:18, h:96, type:'scratchpost', nc:true },
+      { x:1230, y:GP(104),w:42, h:12, type:'shelf' },
+
+      // Low ottoman — crawl
+      { x:1365, y:GP(26), w:118, h:10, type:'lowfurniture' },
+
+      // Short bookshelf — 42px
+      { x:1562, y:GP(42), w:44, h:42, type:'bookshelf' },
+
+      // Cat tree 2
+      { x:1700, y:GP(148), w:34, h:148, type:'cattree', nc:true },
+      { x:1679, y:GP(58),  w:76, h:12,  type:'shelf' },
+      { x:1667, y:GP(108), w:100,h:12,  type:'shelf' },
+
+      // Armchair
+      { x:1875, y:GP(50), w:98, h:50, type:'armchair' },
+    ],
+    litterboxes: [
+      { x:258,  y:GP(24), w:44, h:24 },
+      { x:410,  y:GP(24), w:44, h:24 },  // moved: was flush with crawl entry
+      { x:1185, y:GP(24), w:44, h:24 },  // moved: was 18px after crawl exit
+      { x:1640, y:GP(24), w:44, h:24 },  // moved: was 33px after crawl exit
+      { x:1828, y:GP(24), w:44, h:24 },
+    ],
+  },
+];
+
+// =====================================================
+//  COLLISION
+// =====================================================
+function overlap(ax,ay,aw,ah, bx,by,bw,bh) {
+  return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
+}
+
+function solidRects() {
+  const out = [];
+  for (const pl of cfg.platforms) {
+    if (!pl.nc) out.push(pl);
+  }
+  return out;
+}
+
+// =====================================================
+//  UPDATE
+// =====================================================
+function update() {
+  frame++;
+  if (gameState !== 'playing') return;
+
+  // particles
+  particles = particles.filter(p => p.life > 0);
+  for (const p of particles) {
+    p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life--;
+  }
+
+  // cat anim
+  P.at++;
+  if (P.at > 8) { P.at = 0; P.af = (P.af + 1) % 4; }
+  if (P.inv > 0) P.inv--;
+
+  // --- input ---
+  const goL = keys['ArrowLeft']  || keys['a'];
+  const goR = keys['ArrowRight'] || keys['d'];
+  const jump = keys['ArrowUp']   || keys['z'] || keys['w'] || keys[' '];
+  const duck = keys['ArrowDown'] || keys['s'];
+
+  // crawl toggle
+  if (duck && P.onGround) {
+    P.crawling = true; P.h = P_H_C;
+  } else if (!duck && P.crawling) {
+    // try to stand — check ceiling clearance
+    const testY = P.y - (P_H_S - P_H_C);
+    let blocked = false;
+    for (const r of solidRects()) {
+      if (overlap(P.x, testY, P.w, P_H_S, r.x, r.y, r.w, r.h)) { blocked=true; break; }
+    }
+    if (!blocked) { P.crawling=false; P.y=testY; P.h=P_H_S; }
+  }
+
+  // horizontal speed
+  const spd = P.boosted ? BOOST_SPD : WALK_SPD;
+  if (goL)       { P.vx=-spd; P.facing=-1; }
+  else if (goR)  { P.vx= spd; P.facing= 1; }
+  else           { P.vx=0; }
+
+  // footstep sound
+  if (P.onGround && P.vx !== 0) {
+    stepTimer++;
+    if (stepTimer >= 20) { stepTimer=0; sfxStep(); }
+  } else stepTimer=0;
+
+  // jump
+  if (jump && P.onGround) {
+    P.vy = JUMP_VY;
+    P.onGround = false;
+    sfxJump();
+    burst(P.x+P.w/2, P.y+P.h, '#ffcc00', 5);
+  }
+
+  // gravity
+  P.vy += GRAVITY;
+  if (P.vy > 20) P.vy = 20;
+
+  P.wasGround = P.onGround;
+
+  // --- move X, resolve ---
+  P.x += P.vx;
+  P.x = Math.max(0, Math.min(P.x, levelW - P.w));
+
+  for (const r of solidRects()) {
+    if (overlap(P.x, P.y, P.w, P.h, r.x, r.y, r.w, r.h)) {
+      if (P.vx > 0)      P.x = r.x - P.w;
+      else if (P.vx < 0) P.x = r.x + r.w;
+      P.vx = 0;
+    }
+  }
+
+  // --- move Y, resolve ---
+  P.y += P.vy;
+  P.onGround = false;
+
+  for (const r of solidRects()) {
+    if (!overlap(P.x, P.y, P.w, P.h, r.x, r.y, r.w, r.h)) continue;
+
+    // Low furniture = ceiling slab. Standing player (h=26) can't pass; crawling (h=13) clears it.
+    if (r.type === 'lowfurniture') {
+      P.y = r.y + r.h;
+      if (P.vy < 0) P.vy = 0;
+      continue;
+    }
+
+    if (P.vy >= 0) {
+      // land on top
+      if (P.y + P.h - P.vy <= r.y + 6) {
+        P.y = r.y - P.h;
+        P.vy = 0;
+        P.onGround = true;
+        if (!P.wasGround) sfxLand();
+        if (r.type === 'shelf' && !P.boosted) {
+          P.boosted = true;
+          sfxBoost();
+          score += 10; updateHUD();
+          burst(P.x+P.w/2, P.y+P.h, '#ff6600', 10);
+        }
+        if (r.type !== 'shelf') P.boosted = false;
+      }
+    } else if (P.vy < 0) {
+      // hit ceiling
+      P.y = r.y + r.h;
+      P.vy = 0;
+    }
+  }
+
+  // floor
+  if (P.y + P.h >= GROUND_Y) {
+    if (!P.wasGround && P.vy > 0) sfxLand();
+    P.y = GROUND_Y - P.h;
+    P.vy = 0;
+    P.onGround = true;
+    P.boosted = false;
+  }
+
+  // --- hazards ---
+  if (P.inv === 0) {
+    for (const lb of cfg.litterboxes) {
+      if (overlap(P.x+4, P.y+4, P.w-8, P.h-4, lb.x+4, lb.y, lb.w-8, lb.h)) {
+        hit(); break;
+      }
+    }
+  }
+
+  // --- treat ---
+  const tr = cfg.treat;
+  if (overlap(P.x, P.y, P.w, P.h, tr.x, tr.y, 28, 28)) {
+    collect();
+  }
+
+  // camera smooth follow with look-ahead
+  const targetCX = P.x - W/3 + P.facing * 60;
+  cam.x += (targetCX - cam.x) * 0.1;
+  cam.x = Math.max(0, Math.min(cam.x, levelW - W));
+}
+
+// =====================================================
+//  EVENTS
+// =====================================================
+function hit() {
+  lives--;
+  P.inv = 130;
+  P.vy = -6;
+  sfxHurt();
+  burst(P.x+P.w/2, P.y+P.h/2, '#ff2244', 20);
+  updateHUD();
+  if (lives <= 0) {
+    gameState = 'over';
+    setTimeout(()=>showOv('GAME OVER',['No treats today...','Try again?'],'TRY AGAIN',
+      ()=>{lives=3;score=0;levelNum=1;startLevel();}), 700);
+  }
+}
+
+function collect() {
+  if (gameState !== 'playing') return;
+  gameState = 'transitioning';
+  score += 200 + levelNum*100; updateHUD();
+  sfxTreat();
+  burst(cfg.treat.x+14, cfg.treat.y+14, '#ffcc00', 40);
+  burst(P.x+P.w/2, P.y+P.h/2, '#ffcc00', 20);
+  if (levelNum < 2) {
+    setTimeout(()=>showOv('LEVEL '+(levelNum+1),['Treat found! Next room!','Score: '+score],
+      'CONTINUE', ()=>{levelNum++;startLevel();}), 800);
+  } else {
+    sfxWin();
+    setTimeout(()=>showOv('YOU WIN!',['All treats collected!','Final Score: '+score,'Purrfect!'],
+      'PLAY AGAIN', ()=>{lives=3;score=0;levelNum=1;startLevel();}), 800);
+  }
+}
+
+function burst(x,y,color,n) {
+  for (let i=0;i<n;i++) {
+    particles.push({
+      x,y,
+      vx:(Math.random()-0.5)*5,
+      vy:(Math.random()-2)*4,
+      color, life:25+Math.random()*25, size:3+Math.random()*4
+    });
+  }
+}
+
+// =====================================================
+//  DRAW HELPERS
+// =====================================================
+function px(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(Math.round(x),Math.round(y),w,h); }
+function sx(wx) { return Math.round(wx - cam.x); }
+
+const BC=['#E53935','#1E88E5','#43A047','#FB8C00','#8E24AA','#00ACC1','#F4511E'];
+
+function drawBG() {
+  // wall
+  ctx.fillStyle='#F0DECA'; ctx.fillRect(0,0,W,GROUND_Y);
+  ctx.fillStyle='#E0CDB6';
+  const wo=-((cam.x*0.25)%48);
+  for(let x=wo;x<W;x+=48) ctx.fillRect(x,0,20,GROUND_Y);
+  // baseboard
+  ctx.fillStyle='#FFF5EC'; ctx.fillRect(0,GROUND_Y-10,W,10);
+  ctx.fillStyle='#C8B898'; ctx.fillRect(0,GROUND_Y-10,W,3);
+  // floor
+  ctx.fillStyle='#C89A55'; ctx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
+  ctx.fillStyle='#B88A45';
+  const fo=-((cam.x*0.5)%72);
+  for(let x=fo;x<W;x+=72) ctx.fillRect(x,GROUND_Y,36,H-GROUND_Y);
+}
+
+function drawPlat(pl) {
+  const x=sx(pl.x), y=pl.y, w=pl.w, h=pl.h;
+  switch(pl.type) {
+    case 'sofa':
+      px(x,y+12,w,h-12,'#C05830');
+      px(x,y,   w,16,  '#D06A40');       // back cushion
+      px(x,y,   14,h,  '#D06A40');       // armrest L
+      px(x+w-14,y,14,  h,'#D06A40');    // armrest R
+      px(x+4,y+h-9,8,9,'#6B3010');     // leg L
+      px(x+w-12,y+h-9,8,9,'#6B3010'); // leg R
+      break;
+    case 'table':
+      px(x,y,w,9,'#B08020');
+      px(x+1,y+5,w-2,6,'#907010');
+      px(x+4,  y+9,7,h-9,'#907010');
+      px(x+w-11,y+9,7,h-9,'#907010');
+      break;
+    case 'counter':
+      px(x,y,w,h,'#D5D5D5');
+      px(x,y,w,9,'#BDBDBD');
+      for(let dx=4;dx<w-8;dx+=38) {
+        px(x+dx,y+14,34,h-18,'#B5B5B5');
+        px(x+dx+14,y+h/2-3,5,9,'#888');
+      }
+      break;
+    case 'shelf':
+      px(x,y,w,h,'#D4A060');
+      px(x,y,w,5,'#B88040');
+      // books above shelf
+      for(let bx=3;bx<w-6;bx+=11) {
+        px(x+bx,y-18,9,18,BC[Math.floor((bx/11+(y>>4)))%BC.length]);
+        px(x+bx+1,y-18,7,2,'#ffffff33');
+      }
+      break;
+    case 'cattree':
+      // decorative only — no collision
+      px(x+w/2-5,y,10,h,'#C89010');
+      for(let ry=y;ry<y+h;ry+=8) px(x+w/2-5,ry,10,4,'#A07008');
+      break;
+    case 'bookshelf':
+      px(x,y,w,h,'#6B3020');
+      px(x+3,y+h/2-2,w-6,4,'#8B4030');
+      for(let row=0;row<2;row++) {
+        const ry=y+4+row*(h/2);
+        for(let bx=4;bx<w-5;bx+=10) {
+          px(x+bx,ry,8,h/2-6,BC[(bx+row*4)%BC.length]);
+        }
+      }
+      break;
+    case 'lowfurniture':
+      // Draw full visual piece (26px tall) but only the top slab is a collision rect
+      px(x,y,w,10,'#5B7080');      // collision slab (top)
+      px(x,y,w,6,'#7090A0');       // highlight
+      px(x,y+10,w,16,'#4A6070');   // lower body (visual only, no collision)
+      px(x+5,   y+18,10,8,'#405060'); // legs
+      px(x+w-15,y+18,10,8,'#405060');
+      break;
+    case 'armchair':
+      px(x,y+18,w,h-18,'#6040C0');
+      px(x,y,   w,22,  '#8060E0');
+      px(x,y,   15,h,  '#8060E0');
+      px(x+w-15,y,15,  h,'#8060E0');
+      break;
+    case 'scratchpost':
+      // decorative only — no collision
+      px(x+w/2-5,y,10,h,'#B87010');
+      for(let ry=y;ry<y+h;ry+=7) px(x+w/2-5,ry,10,4,'#906010');
+      px(x+w/2-8,y-17,16,17,'#E91E63');
+      px(x+w/2-4,y-21,8, 8, '#FF6090');
+      break;
+  }
+}
+
+function drawLitter(lb) {
+  const x=sx(lb.x), y=lb.y, w=lb.w, h=lb.h;
+  px(x,y+5,w,h-5,'#A09860');
+  px(x+4,y+9,w-8,h-11,'#D0C090');
+  // stink waves
+  ctx.strokeStyle='#88cc44'; ctx.lineWidth=2;
+  const t=frame*0.07;
+  for(let i=0;i<3;i++){
+    const ox=x+8+i*12, wave=Math.sin(t+i*1.3)*5;
+    ctx.beginPath(); ctx.moveTo(ox,y);
+    ctx.quadraticCurveTo(ox+wave,y-10,ox,y-21); ctx.stroke();
+  }
+  ctx.font='11px serif';
+  ctx.fillText('\uD83D\uDC80',x+w/2-7,y-23);
+}
+
+function drawTreat(tr) {
+  const x=sx(tr.x), bob=Math.sin(frame*0.08)*5, y=tr.y+bob;
+  ctx.save();
+  ctx.shadowColor='#ffcc00'; ctx.shadowBlur=22;
+  px(x+8,y,   12,28,'#FFCC00');
+  px(x,  y+8, 28,12,'#FFCC00');
+  px(x+5,y+5, 18,18,'#FFE566');
+  px(x+10,y+10,8,8, '#FFF0AA');
+  ctx.restore();
+  ctx.fillStyle='#fff'; ctx.font='9px serif';
+  ['\u2726','\u2B51','\u2726'].forEach((s,i)=>{
+    const a=frame*0.06+i*2.09;
+    ctx.fillText(s,x+14+Math.cos(a)*20,y+14+Math.sin(a)*11);
+  });
+}
+
+function drawCat() {
+  const x=sx(P.x), y=Math.round(P.y);
+  const f=P.facing;
+  const blink=frame%70<4;
+  const flash=P.inv>0 && frame%8<4;
+  if(flash) ctx.globalAlpha=0.35;
+
+  const BD='#909090', ST='#686868', BL='#E0CEBC';
+
+  if(P.crawling){
+    px(x,y+8,P.w,10,BD);
+    px(x+4,y+10,P.w-8,6,BL);
+    px(x+5,y+8,3,8,ST); px(x+14,y+8,3,8,ST);
+    // tail
+    if(f>0){px(x,y-2,4,13,BD);px(x,y-2,8,4,BD);}
+    else   {px(x+P.w-4,y-2,4,13,BD);px(x+P.w-11,y-2,8,4,BD);}
+    // feet
+    px(x+2,y+16,7,4,BD); px(x+P.w-9,y+16,7,4,BD);
+    // head
+    const hx=f>0?x+P.w-15:x+1;
+    px(hx,y+1,14,12,BD);
+    if(f>0){px(hx+2,y-5,4,7,BD);px(hx+8,y-4,4,6,BD);}
+    else   {px(hx,  y-5,4,7,BD);px(hx+6,y-4,4,6,BD);}
+    const ex=f>0?hx+9:hx+1;
+    if(!blink) px(ex,y+4,4,4,'#33cc33');
+    else px(ex,y+7,4,2,'#33cc33');
+    px(f>0?hx+11:hx+1,y+8,3,2,'#ff9999');
+  } else {
+    // body
+    px(x+4,y+8,20,16,BD);
+    px(x+6,y+12,16,10,BL);
+    px(x+6,y+8,3,10,ST); px(x+13,y+8,3,10,ST); px(x+20,y+8,3,10,ST);
+    // legs
+    const lo=P.onGround?[0,3,5,3][P.af]:0;
+    px(x+5,y+23,7,5+lo,BD); px(x+16,y+23,7,5-lo,BD);
+    // tail
+    const tw=Math.sin(frame*0.12)*5;
+    if(f>0){px(x,y+12+tw,4,13,BD);px(x,y+10+tw,8,5,BD);}
+    else   {px(x+P.w-4,y+12+tw,4,13,BD);px(x+P.w-8,y+10+tw,8,5,BD);}
+    // head
+    const hx=f>0?x+8:x+2;
+    px(hx,y-2,16,14,BD);
+    if(f>0){
+      px(x+10,y-8,6,8,BD);px(x+11,y-6,4,5,'#ffaaaa');
+      px(x+19,y-6,6,7,BD);px(x+20,y-4,4,4,'#ffaaaa');
+    } else {
+      px(x+3, y-8,6,8,BD);px(x+4, y-6,4,5,'#ffaaaa');
+      px(x+12,y-6,6,7,BD);px(x+13,y-4,4,4,'#ffaaaa');
+    }
+    // eye
+    const ex=f>0?x+20:x+4;
+    if(!blink){px(ex,y+1,5,5,'#33cc33');px(ex+1,y+2,2,2,'#fff');}
+    else px(ex,y+5,5,2,'#33cc33');
+    // nose
+    px(f>0?x+25:x+3,y+7,3,2,'#ff9999');
+    // whiskers
+    ctx.strokeStyle='#ccc'; ctx.lineWidth=1;
+    const nx=f>0?x+27:x+6;
+    for(let wi=-1;wi<=1;wi++){
+      ctx.beginPath();ctx.moveTo(nx,y+9+wi*2);
+      ctx.lineTo(nx+f*13,y+8+wi*2);ctx.stroke();
+    }
+  }
+
+  // speed glow
+  if(P.boosted){
+    ctx.save();
+    ctx.shadowColor='#ff8800';ctx.shadowBlur=18;
+    ctx.strokeStyle='#ff8800';ctx.lineWidth=2;
+    ctx.strokeRect(x-1,y-1,P.w+2,P.h+2);
+    ctx.restore();
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawParticles() {
+  for(const p of particles){
+    ctx.globalAlpha=Math.max(0,p.life/50);
+    ctx.fillStyle=p.color;
+    ctx.fillRect(Math.round(p.x-cam.x-p.size/2),Math.round(p.y-p.size/2),p.size,p.size);
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawHints() {
+  for(const pl of cfg.platforms){
+    const sx2=pl.x-cam.x;
+    if(sx2 < -150 || sx2 > W+50) continue;
+    if(pl.type==='lowfurniture'){
+      ctx.fillStyle='#ffffffbb';
+      ctx.font='7px "Press Start 2P"';
+      ctx.fillText('\u2193 CRAWL',sx(pl.x)+pl.w/2-22,pl.y-9);
+    }
+    if(pl.type==='shelf'){
+      ctx.fillStyle='#ffcc00aa';
+      ctx.font='6px "Press Start 2P"';
+      ctx.fillText('BOOST!',sx(pl.x)+pl.w/2-15,pl.y-9);
+    }
+  }
+}
+
+function drawArrow() {
+  const tx=cfg.treat.x+14-cam.x;
+  if(tx>10 && tx<W-10) return;
+  ctx.fillStyle='#ffcc00';
+  ctx.font='11px "Press Start 2P"';
+  const d=tx>W/2?'\u25BA':'\u25C4';
+  ctx.fillText(d+' TREAT',W/2-36,22);
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  drawBG();
+  for(const pl of cfg.platforms){
+    if(pl.x-cam.x > W+200 || pl.x+pl.w-cam.x < -200) continue;
+    drawPlat(pl);
+  }
+  for(const lb of cfg.litterboxes){
+    if(lb.x-cam.x > W+80 || lb.x+lb.w-cam.x < -80) continue;
+    drawLitter(lb);
+  }
+  const tr=cfg.treat;
+  if(tr.x-cam.x > -40 && tr.x-cam.x < W+40) drawTreat(tr);
+  drawParticles();
+  drawCat();
+  drawHints();
+  drawArrow();
+}
+
+// =====================================================
+//  UI
+// =====================================================
+function updateHUD() {
+  document.getElementById('livesDisplay').textContent='♥'.repeat(Math.max(0,lives));
+  document.getElementById('scoreDisplay').textContent=score;
+  document.getElementById('levelDisplay').textContent=levelNum;
+}
+
+function showOv(title,lines,btnTxt,cb) {
+  gameState='paused';
+  const ov=document.getElementById('overlay');
+  const ic=title==='YOU WIN!'?'&#x1F63B;':title.includes('LEVEL')?'&#x1F63A;':'&#x1F63F;';
+  ov.innerHTML=`
+    <div class="icon">${ic}</div>
+    <h2>${title}</h2>
+    ${lines.map(l=>`<p>${l}</p>`).join('')}
+    <button class="btn" id="ovBtn">${btnTxt}</button>
+  `;
+  ov.style.display='flex';
+  document.getElementById('ovBtn').onclick=()=>{
+    ov.style.display='none';
+    if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+    cb();
+  };
+}
+
+function startLevel() {
+  cfg    = LEVELS[levelNum-1];
+  levelW = cfg.width;
+  particles=[];
+  resetPlayer(cfg.playerStart.x, cfg.playerStart.y);
+  gameState='playing';
+  updateHUD();
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display='none';
+  if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  lives=3;score=0;levelNum=1;
+  startLevel();
+}
+
+// =====================================================
+//  INPUT
+// =====================================================
+document.addEventListener('keydown',e=>{
+  keys[e.key]=true;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup',e=>{ keys[e.key]=false; });
+
+// Mobile controls
+(function(){
+  const mc=document.createElement('div');
+  mc.style.cssText='display:flex;gap:8px;margin-top:10px;justify-content:center;';
+  mc.innerHTML=`
+    <style>
+      .mb{width:55px;height:55px;background:#ffcc00;border:none;border-radius:4px;
+          font-family:"Press Start 2P",monospace;font-size:18px;cursor:pointer;
+          box-shadow:3px 3px #ff6600;color:#1a0a2e;touch-action:manipulation;user-select:none;}
+      .mb:active{transform:translate(2px,2px);box-shadow:1px 1px #ff6600;}
+    </style>
+    <button class="mb" id="mb-l">\u25C4</button>
+    <button class="mb" id="mb-d" style="background:#ffaa00">\u25BC</button>
+    <button class="mb" id="mb-j" style="background:#ff9900">\u25B2</button>
+    <button class="mb" id="mb-r">\u25BA</button>
+  `;
+  document.body.appendChild(mc);
+  if(!('ontouchstart' in window)) mc.style.display='none';
+  const map={'mb-l':'ArrowLeft','mb-r':'ArrowRight','mb-d':'ArrowDown','mb-j':'ArrowUp'};
+  for(const id of Object.keys(map)){
+    const el=document.getElementById(id), k=map[id];
+    el.addEventListener('touchstart',e=>{e.preventDefault();keys[k]=true;},{passive:false});
+    el.addEventListener('touchend',  e=>{e.preventDefault();keys[k]=false;},{passive:false});
+    el.addEventListener('touchcancel',()=>keys[k]=false);
+    el.addEventListener('mousedown',()=>keys[k]=true);
+    el.addEventListener('mouseup',  ()=>keys[k]=false);
+    el.addEventListener('mouseleave',()=>keys[k]=false);
+  }
+})();
+
+// =====================================================
+//  LOOP
+// =====================================================
+cfg    = LEVELS[0];
+levelW = cfg.width;
+resetPlayer(cfg.playerStart.x, cfg.playerStart.y);
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>
