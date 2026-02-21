@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nora's Games</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --text-color: #00ff41; /* Classic Terminal Green */
+            --accent-color: #ff00ff; /* Neon Pink */
+            --border-style: 4px solid #fff;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            text-shadow: 2px 2px #000;
+        }
+
+        h1 {
+            color: var(--text-color);
+            font-size: 2.5rem;
+            margin-bottom: 50px;
+            text-align: center;
+            border-bottom: 6px double var(--text-color);
+            padding-bottom: 10px;
+        }
+
+        .game-container {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1000px;
+        }
+
+        .game-card {
+            background: #222;
+            border: var(--border-style);
+            padding: 20px;
+            width: 300px;
+            text-align: center;
+            transition: transform 0.2s, border-color 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .game-card:hover {
+            transform: scale(1.05);
+            border-color: var(--accent-color);
+            background: #333;
+        }
+
+        .game-card img {
+            width: 100%;
+            image-rendering: pixelated; /* Keeps the 8-bit screenshots crisp */
+            border: 2px solid #fff;
+            margin-bottom: 15px;
+        }
+
+        .game-title {
+            font-size: 1rem;
+            margin: 15px 0;
+            line-height: 1.4;
+        }
+
+        .btn {
+            display: inline-block;
+            background: var(--text-color);
+            color: #000;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        footer {
+            margin-top: 50px;
+            font-size: 0.6rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Nora's Games</h1>
+
+    <div class="game-container">
+        <a href="treatquest.html" class="game-card">
+            <img src="treatquest.png" alt="Gus's Treat Quest Screenshot">
+            <div class="game-title">Gus's Treat Quest</div>
+            <div class="btn">Play Now</div>
+        </a>
+
+        <a href="laundrydog.html" class="game-card">
+            <img src="laundrydog.png" alt="Laundry Dog Screenshot">
+            <div class="game-title">Laundry Dog</div>
+            <div class="btn">Play Now</div>
+        </a>
+    </div>
+
+    <footer>
+        &copy; 2026 Nora's Arcade - Insert Coin to Continue
+    </footer>
+
+</body>
+</html>
