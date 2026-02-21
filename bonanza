@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bonanza's Day</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            color: #fff;
+            font-family: 'Press Start 2P', monospace;
+            overflow: hidden; /* Prevent scrolling on mobile */
+            touch-action: none;
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            justify-content: center;
+        }
+
+        #top-bar {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            box-sizing: border-box;
+            position: absolute;
+            top: 0;
+            z-index: 10;
+        }
+
+        #back-btn {
+            color: #fff;
+            text-decoration: none;
+            background: #d32f2f;
+            padding: 8px 12px;
+            border: 2px solid #fff;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        #ui-stats {
+            font-size: 10px;
+            text-align: right;
+            line-height: 1.5;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        canvas {
+            background-color: #5c94fc; /* Sky blue */
+            border: 4px solid #fff;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            width: 100%;
+            max-height: 50vh;
+            image-rendering: pixelated;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            text-align: center;
+        }
+
+        h1 { color: #ffd700; font-size: 24px; margin-bottom: 10px; }
+        p { font-size: 10px; line-height: 1.6; max-width: 80%; }
+        
+        .btn {
+            background: #4caf50;
+            color: white;
+            border: 4px solid #fff;
+            padding: 15px 20px;
+            font-family: inherit;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .btn:active { background: #388e3c; }
+
+        /* Mobile Controls */
+        #mobile-controls {
+            display: none;
+            width: 100%;
+            justify-content: space-between;
+            padding: 15px;
+            box-sizing: border-box;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 800px) {
+            #mobile-controls { display: flex; }
+            h1 { font-size: 18px; }
+            p { font-size: 8px; }
+        }
+
+        .d-pad, .action-pad { display: flex; gap: 10px; }
+        .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid #fff;
+            color: #fff;
+            width: 60px;
+            height: 60px;
+            font-size: 20px;
+            border-radius: 10px;
+            user-select: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .control-btn:active { background: rgba(255, 255, 255, 0.5); }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <div id="top-bar">
+        <a href="index.html" id="back-btn">◄ Back</a>
+        <div id="ui-stats">
+            <div>LIVES: <span id="lives-ui">4</span></div>
+            <div>TIME: <span id="time-ui">60</span></div>
+            <div>SCORE: <span id="score-ui">0</span></div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+    <div id="overlay">
+        <h1>Bonanza's Day</h1>
+        <p>Help Bonanza get to the dog park!</p>
+        <p>Desktop: Arrow Keys to Move/Crawl, Space to Jump.</p>
+        <p>Mobile: Use on-screen buttons.</p>
+        <p>Avoid cats, potholes, and the dog catcher's net!</p>
+        <button class="btn" id="start-btn">START GAME</button>
+    </div>
+
+    <div id="mobile-controls">
+        <div class="d-pad">
+            <div class="control-btn" id="btn-left">◄</div>
+            <div class="control-btn" id="btn-right">►</div>
+        </div>
+        <div class="action-pad">
+            <div class="control-btn" id="btn-crawl">▼</div>
+            <div class="control-btn" id="btn-jump">▲</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // UI Elements
+    const livesUI = document.getElementById('lives-ui');
+    const timeUI = document.getElementById('time-ui');
+    const scoreUI = document.getElementById('score-ui');
+    const overlay = document.getElementById('overlay');
+    const startBtn = document.getElementById('start-btn');
+
+    // Game Constants
+    const GRAVITY = 0.6;
+    const GROUND_Y = 320;
+    const LEVEL_END_X = 5000;
+
+    // Game State
+    let state = 'START'; // START, PLAYING, GAMEOVER, WIN
+    let cameraX = 0;
+    let timeRemaining = 60;
+    let score = 0;
+    let lastTime = 0;
+    let timerInterval;
+    
+    // Input State
+    const keys = { right: false, left: false, up: false, down: false };
+
+    // Audio Context (Initialized on user interaction)
+    let audioCtx;
+
+    function playTone(freq, type, duration, vol=0.1) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function playStartSound() {
+        if (!audioCtx) return;
+        [261.63, 329.63, 392.00, 523.25].forEach((freq, i) => {
+            setTimeout(() => playTone(freq, 'square', 0.15, 0.1), i * 150);
+        });
+    }
+
+    function playWinSound() {
+        if (!audioCtx) return;
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+            setTimeout(() => playTone(freq, 'square', 0.2, 0.15), i * 200);
+        });
+        setTimeout(() => playTone(1046.50, 'square', 0.6, 0.15), 800);
+    }
+
+    function playHitSound() { playTone(150, 'sawtooth', 0.3, 0.2); }
+    function playJumpSound() { playTone(400, 'sine', 0.2, 0.05); }
+    function playTreatSound() { playTone(880, 'square', 0.1, 0.1); }
+
+    // Player Object
+    const player = {
+        x: 100, y: GROUND_Y - 30,
+        width: 40, height: 30,
+        vx: 0, vy: 0,
+        speed: 5, jumpForce: -12,
+        lives: 4,
+        isCrawling: false,
+        invulnerable: 0,
+        speedBoost: 0
+    };
+
+    // Entities Arrays
+    let hazards = [];
+    let treats = [];
+
+    function generateLevel() {
+        hazards = [];
+        treats = [];
+        
+        for (let i = 400; i < LEVEL_END_X - 400; i += Math.random() * 300 + 200) {
+            const rand = Math.random();
+            if (rand < 0.33) {
+                // Cat (Jump over)
+                hazards.push({ type: 'cat', x: i, y: GROUND_Y - 20, w: 20, h: 20 });
+            } else if (rand < 0.66) {
+                // Pothole (Jump over)
+                hazards.push({ type: 'pothole', x: i, y: GROUND_Y, w: 60, h: 10 });
+            } else {
+                // Dog Catcher Net (Crawl under) - Hovering above ground
+                hazards.push({ type: 'catcher', x: i, y: GROUND_Y - 50, w: 30, h: 35 });
+            }
+
+            // Occasional Treat
+            if (Math.random() < 0.4) {
+                const treatType = Math.random() < 0.8 ? 'speed' : 'life';
+                treats.push({ 
+                    type: treatType, 
+                    x: i + 100, 
+                    y: GROUND_Y - 40 - Math.random() * 40, 
+                    w: 15, h: 15 
+                });
+            }
+        }
+    }
+
+    function resetGame() {
+        player.x = 100;
+        player.y = GROUND_Y - 30;
+        player.vx = 0;
+        player.vy = 0;
+        player.lives = 4;
+        player.invulnerable = 0;
+        player.speedBoost = 0;
+        timeRemaining = 60;
+        score = 0;
+        cameraX = 0;
+        generateLevel();
+        updateUI();
+    }
+
+    function updateUI() {
+        livesUI.innerText = player.lives;
+        timeUI.innerText = timeRemaining;
+        scoreUI.innerText = score;
+    }
+
+    // Input Handling
+    window.addEventListener('keydown', e => {
+        if (e.code === 'ArrowRight') keys.right = true;
+        if (e.code === 'ArrowLeft') keys.left = true;
+        if (e.code === 'ArrowDown') keys.down = true;
+        if (e.code === 'ArrowUp' || e.code === 'Space') {
+            keys.up = true;
+            if (player.y >= GROUND_Y - player.height && state === 'PLAYING') {
+                player.vy = player.jumpForce;
+                playJumpSound();
+            }
+        }
+    });
+
+    window.addEventListener('keyup', e => {
+        if (e.code === 'ArrowRight') keys.right = false;
+        if (e.code === 'ArrowLeft') keys.left = false;
+        if (e.code === 'ArrowDown') keys.down = false;
+        if (e.code === 'ArrowUp' || e.code === 'Space') keys.up = false;
+    });
+
+    // Touch Controls setup
+    const setupTouch = (id, keyName, isJump = false) => {
+        const btn = document.getElementById(id);
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            keys[keyName] = true;
+            if (isJump && player.y >= GROUND_Y - player.height && state === 'PLAYING') {
+                player.vy = player.jumpForce;
+                playJumpSound();
+            }
+        });
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            keys[keyName] = false;
+        });
+    };
+
+    setupTouch('btn-left', 'left');
+    setupTouch('btn-right', 'right');
+    setupTouch('btn-crawl', 'down');
+    setupTouch('btn-jump', 'up', true);
+
+    function checkCollision(r1, r2) {
+        return !(r2.x > r1.x + r1.w || 
+                 r2.x + r2.w < r1.x || 
+                 r2.y > r1.y + r1.h ||
+                 r2.y + r2.h < r1.y);
+    }
+
+    function update(deltaTime) {
+        if (state !== 'PLAYING') return;
+
+        // Apply Timers
+        if (player.invulnerable > 0) player.invulnerable -= deltaTime;
+        if (player.speedBoost > 0) player.speedBoost -= deltaTime;
+
+        // Movement Speed logic
+        let currentSpeed = player.speedBoost > 0 ? player.speed * 1.5 : player.speed;
+
+        if (keys.right) player.vx = currentSpeed;
+        else if (keys.left) player.vx = -currentSpeed;
+        else player.vx = 0;
+
+        // Crawling Logic
+        if (keys.down && player.y >= GROUND_Y - 30) {
+            player.height = 15; // flatten
+            player.isCrawling = true;
+        } else {
+            // Uncrawl
+            player.height = 30;
+            player.isCrawling = false;
+            // Push player up if they were crawling so they don't clip into ground
+            if (player.y > GROUND_Y - player.height) {
+                player.y = GROUND_Y - player.height;
+            }
+        }
+
+        // Apply Physics
+        player.vy += GRAVITY;
+        player.x += player.vx;
+        player.y += player.vy;
+
+        // Ground Collision
+        if (player.y + player.height > GROUND_Y) {
+            player.y = GROUND_Y - player.height;
+            player.vy = 0;
+        }
+
+        // Keep player from going backwards infinitely
+        if (player.x < cameraX) player.x = cameraX;
+
+        // Camera Follow
+        if (player.x > cameraX + 300) {
+            cameraX = player.x - 300;
+        }
+
+        // Hitbox for player
+        const playerRect = { x: player.x, y: player.y, w: player.width, h: player.height };
+
+        // Hazards Collision
+        if (player.invulnerable <= 0) {
+            for (let i = 0; i < hazards.length; i++) {
+                if (checkCollision(playerRect, hazards[i])) {
+                    player.lives--;
+                    playHitSound();
+                    updateUI();
+                    
+                    if (player.lives <= 0) {
+                        endGame('GAMEOVER');
+                        return;
+                    } else {
+                        // Respawn "at same spot" via brief invulnerability so they can pass
+                        player.invulnerable = 2000; 
+                    }
+                }
+            }
+        }
+
+        // Treats Collision
+        for (let i = treats.length - 1; i >= 0; i--) {
+            if (checkCollision(playerRect, treats[i])) {
+                playTreatSound();
+                if (treats[i].type === 'life') {
+                    player.lives++;
+                } else if (treats[i].type === 'speed') {
+                    player.speedBoost = 3000; // 3 seconds
+                }
+                score += 50;
+                treats.splice(i, 1);
+                updateUI();
+            }
+        }
+
+        // Check Win Condition
+        if (player.x >= LEVEL_END_X) {
+            score += timeRemaining * 10;
+            score += player.lives * 100;
+            updateUI();
+            endGame('WIN');
+        }
+    }
+
+    function draw() {
+        // Clear screen / Draw Sky
+        ctx.fillStyle = '#5c94fc';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Ground
+        ctx.fillStyle = '#8B4513'; // Dirt
+        ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+        ctx.fillStyle = '#228B22'; // Grass top
+        ctx.fillRect(0, GROUND_Y, canvas.width, 10);
+
+        ctx.save();
+        ctx.translate(-cameraX, 0); // Apply camera offset
+
+        // Draw Dog Park Goal
+        ctx.fillStyle = '#32CD32'; // Park Green Base
+        ctx.fillRect(LEVEL_END_X, GROUND_Y - 100, 200, 100);
+        ctx.fillStyle = '#fff';
+        ctx.font = "16px 'Press Start 2P'";
+        ctx.fillText("DOG PARK", LEVEL_END_X + 20, GROUND_Y - 110);
+
+        // Draw Hazards
+        hazards.forEach(h => {
+            if (h.type === 'cat') {
+                ctx.fillStyle = '#FF8C00'; // Orange cat
+            } else if (h.type === 'pothole') {
+                ctx.fillStyle = '#111'; // Black hole
+            } else if (h.type === 'catcher') {
+                ctx.fillStyle = '#d32f2f'; // Red net
+            }
+            ctx.fillRect(h.x, h.y, h.w, h.h);
+        });
+
+        // Draw Treats
+        treats.forEach(t => {
+            if (t.type === 'life') ctx.fillStyle = '#ff69b4'; // Pink heart-ish
+            else ctx.fillStyle = '#FFD700'; // Gold speed
+            ctx.fillRect(t.x, t.y, t.w, t.h);
+        });
+
+        // Draw Bonanza (Player)
+        if (player.invulnerable <= 0 || Math.floor(Date.now() / 150) % 2 === 0) {
+            ctx.fillStyle = player.speedBoost > 0 ? '#DAA520' : '#8B4513'; // Gold if boosted, else Brown
+            
+            // Draw dog body
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            
+            // Draw dog snout/ear detail simply
+            ctx.fillStyle = '#000';
+            if (keys.left) {
+                ctx.fillRect(player.x + 5, player.y + 5, 5, 5); // eye
+                ctx.fillRect(player.x - 5, player.y + 10, 10, 5); // snout
+            } else {
+                ctx.fillRect(player.x + player.width - 10, player.y + 5, 5, 5); // eye
+                ctx.fillRect(player.x + player.width - 5, player.y + 10, 10, 5); // snout
+            }
+        }
+
+        ctx.restore();
+    }
+
+    function gameLoop(timestamp) {
+        if (!lastTime) lastTime = timestamp;
+        const deltaTime = timestamp - lastTime;
+        lastTime = timestamp;
+
+        update(deltaTime);
+        draw();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    function endGame(endState) {
+        state = endState;
+        clearInterval(timerInterval);
+        overlay.style.display = 'flex';
+        
+        if (state === 'WIN') {
+            playWinSound();
+            overlay.innerHTML = `
+                <h1>GOOD BOY!</h1>
+                <p>Bonanza made it to the park!</p>
+                <p>Final Score: ${score}</p>
+                <button class="btn" id="restart-btn">PLAY AGAIN</button>
+            `;
+        } else {
+            overlay.innerHTML = `
+                <h1 style="color:#d32f2f;">GAME OVER</h1>
+                <p>Oh no! Bonanza didn't make it.</p>
+                <button class="btn" id="restart-btn">TRY AGAIN</button>
+            `;
+        }
+        
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            resetGame();
+            startGame();
+        });
+    }
+
+    function startGame() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        playStartSound();
+        overlay.style.display = 'none';
+        state = 'PLAYING';
+        lastTime = 0;
+        
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            if (state === 'PLAYING') {
+                timeRemaining--;
+                updateUI();
+                if (timeRemaining <= 0) {
+                    endGame('GAMEOVER');
+                }
+            }
+        }, 1000);
+        
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Init Event
+    startBtn.addEventListener('click', () => {
+        resetGame();
+        startGame();
+    });
+
+    // Initial render
+    resetGame();
+    draw();
+</script>
+</body>
+</html>
