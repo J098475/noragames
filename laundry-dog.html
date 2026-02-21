@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laundry Dog 🐾</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#1a0a2e;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  min-height:100vh;
+  font-family:'Courier New',monospace;
+  overflow:hidden;
+}
+#gameContainer {
+  position:relative;
+  border:4px solid #ff6b9d;
+  box-shadow:0 0 30px #ff6b9d55, 0 0 60px #9b59b655;
+}
+canvas { display:block; image-rendering:pixelated; }
+#ui {
+  position:absolute; top:0; left:0; right:0;
+  padding:6px 12px;
+  display:flex; justify-content:space-between; align-items:center;
+  background:linear-gradient(180deg,rgba(0,0,0,0.85) 0%,transparent 100%);
+  pointer-events:none; z-index:10;
+}
+.ui-seg { display:flex; flex-direction:column; align-items:center; gap:1px; }
+.ui-label { color:#aaa; font-size:9px; letter-spacing:1px; text-transform:uppercase; }
+.ui-val { color:#ffd700; font-size:15px; font-weight:bold; text-shadow:2px 2px 0 #000; }
+.ui-center { color:#fff; font-size:13px; font-weight:bold; text-shadow:2px 2px 0 #000; text-align:center; }
+#overlay {
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.88); z-index:20;
+}
+#overlay h1 {
+  font-size:44px; color:#ffd700;
+  text-shadow:4px 4px 0 #b8860b, 0 0 20px #ffd70088;
+  margin-bottom:8px; letter-spacing:4px;
+  animation:pulse 1.5s ease-in-out infinite;
+}
+#overlay .sub { color:#ff6b9d; font-size:15px; margin-bottom:20px; letter-spacing:2px; }
+#overlay .box {
+  color:#ddd; font-size:13px; max-width:440px; text-align:center;
+  line-height:1.9; margin-bottom:24px;
+  border:2px solid #ff6b9d44; padding:14px; border-radius:4px;
+}
+#overlay .score-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:10px 30px;
+  margin-bottom:20px; font-size:14px; color:#ddd;
+}
+#overlay .score-grid .sv { color:#ffd700; font-weight:bold; }
+.btn-row { display:flex; gap:14px; }
+#overlay button {
+  background:#ff6b9d; color:#fff; border:none;
+  padding:12px 32px; font-family:'Courier New',monospace;
+  font-size:16px; font-weight:bold; cursor:pointer;
+  letter-spacing:2px; text-transform:uppercase;
+  box-shadow:4px 4px 0 #b8105a; transition:all 0.1s;
+}
+#overlay button:active { transform:translate(2px,2px); box-shadow:2px 2px 0 #b8105a; }
+#overlay button:hover { filter:brightness(1.2); }
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.03)} }
+#floatMsg {
+  position:absolute; top:55px; left:50%; transform:translateX(-50%);
+  color:#ffd700; font-size:18px; font-weight:bold;
+  text-shadow:2px 2px 0 #000; z-index:15;
+  pointer-events:none; opacity:0; transition:opacity 0.3s;
+  white-space:nowrap;
+}
+#ctrl {
+  position:absolute; bottom:5px; left:0; right:0;
+  text-align:center; color:#ffffff44; font-size:10px; pointer-events:none;
+}
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="canvas" width="800" height="500"></canvas>
+  <div id="ui">
+    <div class="ui-seg">
+      <span class="ui-label">Lives</span>
+      <span class="ui-val" id="uiLives">❤️❤️❤️</span>
+    </div>
+    <div class="ui-seg">
+      <span class="ui-center" id="uiLevel">Level 1</span>
+      <span class="ui-center" id="uiRoom" style="font-size:11px;color:#aaa"></span>
+    </div>
+    <div style="display:flex;gap:18px;align-items:center;">
+      <div class="ui-seg">
+        <span class="ui-label">🧺 Laundry</span>
+        <span class="ui-val" id="uiLaundry">0 / 0</span>
+      </div>
+      <div class="ui-seg">
+        <span class="ui-label">Score</span>
+        <span class="ui-val" id="uiScore">0</span>
+      </div>
+    </div>
+  </div>
+  <div id="floatMsg"></div>
+  <div id="ctrl">← → Move &nbsp;|&nbsp; ↑ / Z Jump &nbsp;|&nbsp; Reach 🫧 washer to finish — collect laundry for bonus score!</div>
+  <div id="overlay">
+    <h1>LAUNDRY DOG</h1>
+    <div class="sub">⭐ A Pip Adventure ⭐</div>
+    <div class="box">
+      You are <strong style="color:#ffd700">Pip</strong>, a brave Shih Tzu on a mission!<br>
+      Navigate <strong style="color:#ff6b9d">10 shuffled rooms</strong> and reach the 🫧 <strong style="color:#87ceeb">washing machine</strong>.<br>
+      Collect 🧺 <strong>dirty laundry</strong> for bonus score points.<br>
+      Dodge 🐱 cats — getting hit costs a life but you keep going!<br>
+      Grab 🦴 bones for extra lives or speed boosts!<br>
+      <span style="color:#aaa;font-size:11px">Rooms shuffle every new game for a fresh adventure!</span>
+    </div>
+    <button onclick="startGame()">START GAME</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// ── AUDIO ──────────────────────────────────────────────────────
+let AC = null;
+function initAudio() { if (!AC) AC = new (window.AudioContext||window.webkitAudioContext)(); }
+function tone(f,type='square',dur=0.1,vol=0.12,delay=0) {
+  if (!AC) return;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.connect(g); g.connect(AC.destination);
+  o.type=type; o.frequency.value=f;
+  const t=AC.currentTime+delay;
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(vol,t+0.01);
+  g.gain.linearRampToValueAtTime(0,t+dur);
+  o.start(t); o.stop(t+dur+0.02);
+}
+const sfx = {
+  jump:    ()=>{tone(200,'square',0.07,0.12);tone(350,'square',0.06,0.1,0.06);tone(480,'square',0.05,0.09,0.11);},
+  collect: ()=>{tone(523,'square',0.06,0.12);tone(659,'square',0.06,0.12,0.07);tone(784,'square',0.08,0.12,0.13);},
+  bone:    ()=>{[523,587,659,698,784].forEach((f,i)=>tone(f,'triangle',0.08,0.18,i*0.07));},
+  cat:     ()=>{[300,260,220,185,160].forEach((f,i)=>tone(f,'sawtooth',0.09,0.2,i*0.07));},
+  step:    ()=>{if(Math.random()>.65)tone(110+Math.random()*40,'square',0.03,0.04);},
+  win:     ()=>{
+    [[523,0],[659,0.1],[784,0.2],[880,0.33],[1047,0.47],[880,0.63],[784,0.77],[1047,0.93]].forEach(([f,t])=>tone(f,'square',0.15,0.18,t));
+    [262,330,392].forEach((f,i)=>tone(f,'triangle',1.0,0.07,i*0.22));
+  },
+  gameover:()=>{[440,370,310,260,220,180].forEach((f,i)=>tone(f,'square',0.12,0.18,i*0.1));},
+};
+
+// ── STATE ──────────────────────────────────────────────────────
+let gState='menu', lives=3, totalScore=0, lvlIdx=0;
+let laundryColl=0, laundryTot=0, invincible=0, speedBoost=0, celebTimer=0;
+let levelOrder=[];
+let msgTimer=0;
+const cam={x:0};
+
+// ── PLAYER ────────────────────────────────────────────────────
+const PL={x:50,y:380,w:32,h:28,vx:0,vy:0,onGround:false,facing:1,af:0,at:0,jumping:false};
+
+// ── KEYS ─────────────────────────────────────────────────────
+const K={};
+document.addEventListener('keydown',e=>{K[e.code]=true;
+  if(['ArrowLeft','ArrowRight','ArrowUp','Space','KeyZ'].includes(e.code))e.preventDefault();});
+document.addEventListener('keyup',e=>{K[e.code]=false;});
+
+// ── 10 LEVEL TEMPLATES ────────────────────────────────────────
+const POOL = [
+  // 0 Kitchen
+  {name:'The Kitchen',bg:'#1a1228',w:1700,
+   plats:[
+     {x:0,y:440,w:420,h:60,c:'#8B4513'},{x:440,y:440,w:280,h:60,c:'#8B4513'},
+     {x:760,y:440,w:420,h:60,c:'#8B4513'},{x:1210,y:440,w:490,h:60,c:'#8B4513'},
+     {x:100,y:370,w:120,h:18,c:'#6b3a2a'},{x:230,y:340,w:100,h:18,c:'#a0522d'},
+     {x:500,y:300,w:110,h:18,c:'#a0522d'},{x:660,y:360,w:80,h:18,c:'#a0522d'},
+     {x:900,y:290,w:130,h:18,c:'#a0522d'},{x:1100,y:350,w:100,h:18,c:'#a0522d'},
+     {x:1300,y:300,w:130,h:18,c:'#a0522d'},{x:1500,y:360,w:100,h:18,c:'#a0522d'},
+   ],
+   cats:[{ox:460,oy:400,vx:1.3,minX:450,maxX:710},{ox:800,oy:400,vx:-1.6,minX:770,maxX:1170},{ox:1250,oy:400,vx:1.1,minX:1220,maxX:1670}],
+   laundry:[{ox:270,oy:322,c:'#e74c3c'},{ox:520,oy:282,c:'#3498db'},{ox:920,oy:272,c:'#f39c12'},{ox:1310,oy:282,c:'#9b59b6'},{ox:1520,oy:342,c:'#2ecc71'}],
+   bones:[{ox:660,oy:342,t:'speed'},{ox:1110,oy:332,t:'life'}],
+   wm:{ox:1620,oy:385},start:{x:40,y:380}},
+
+  // 1 Living Room
+  {name:'Living Room',bg:'#1e1030',w:1800,
+   plats:[
+     {x:0,y:440,w:500,h:60,c:'#5a4a8a'},{x:530,y:440,w:350,h:60,c:'#5a4a8a'},
+     {x:910,y:440,w:450,h:60,c:'#5a4a8a'},{x:1390,y:440,w:410,h:60,c:'#5a4a8a'},
+     {x:80,y:390,w:200,h:55,c:'#3d2b6b'},{x:600,y:380,w:140,h:65,c:'#3d2b6b'},
+     {x:1050,y:395,w:100,h:50,c:'#3d2b6b'},
+     {x:350,y:330,w:120,h:15,c:'#7b6aaa'},{x:750,y:290,w:100,h:15,c:'#7b6aaa'},
+     {x:1000,y:310,w:120,h:15,c:'#7b6aaa'},{x:1250,y:270,w:130,h:15,c:'#7b6aaa'},
+     {x:1500,y:310,w:110,h:15,c:'#7b6aaa'},
+   ],
+   cats:[{ox:540,oy:400,vx:1.5,minX:530,maxX:880},{ox:950,oy:400,vx:-1.4,minX:920,maxX:1370},{ox:1400,oy:400,vx:1.2,minX:1400,maxX:1780}],
+   laundry:[{ox:60,oy:372,c:'#e74c3c'},{ox:360,oy:312,c:'#3498db'},{ox:760,oy:272,c:'#f1c40f'},{ox:1260,oy:252,c:'#e67e22'},{ox:1510,oy:292,c:'#1abc9c'},{ox:1050,oy:292,c:'#e91e63'}],
+   bones:[{ox:500,oy:412,t:'life'},{ox:1250,oy:415,t:'speed'}],
+   wm:{ox:1700,oy:385},start:{x:40,y:380}},
+
+  // 2 Upstairs Hallway
+  {name:'Upstairs Hallway',bg:'#0d1f2d',w:1900,
+   plats:[
+     {x:0,y:440,w:380,h:60,c:'#2c5f2e'},
+     {x:380,y:440,w:50,h:60,c:'#3a7a3c'},{x:430,y:418,w:50,h:42,c:'#3a7a3c'},
+     {x:480,y:396,w:50,h:24,c:'#3a7a3c'},{x:530,y:374,w:50,h:26,c:'#3a7a3c'},
+     {x:580,y:352,w:50,h:26,c:'#3a7a3c'},{x:630,y:330,w:50,h:26,c:'#3a7a3c'},
+     {x:680,y:308,w:50,h:26,c:'#3a7a3c'},
+     {x:730,y:290,w:970,h:210,c:'#1e3d1f'},
+     {x:800,y:240,w:110,h:15,c:'#4a8a4c'},{x:980,y:200,w:120,h:15,c:'#4a8a4c'},
+     {x:1170,y:240,w:110,h:15,c:'#4a8a4c'},{x:1360,y:200,w:120,h:15,c:'#4a8a4c'},
+     {x:1560,y:240,w:100,h:15,c:'#4a8a4c'},
+   ],
+   cats:[{ox:80,oy:400,vx:1.3,minX:10,maxX:360},{ox:800,oy:250,vx:1.5,minX:740,maxX:1680},{ox:1200,oy:270,vx:-2,minX:740,maxX:1680}],
+   laundry:[{ox:100,oy:415,c:'#ff6b9d'},{ox:820,oy:222,c:'#87ceeb'},{ox:990,oy:182,c:'#ffd700'},{ox:1375,oy:182,c:'#ff4500'},{ox:1570,oy:222,c:'#00fa9a'},{ox:250,oy:415,c:'#da70d6'}],
+   bones:[{ox:330,oy:415,t:'life'},{ox:1170,oy:222,t:'speed'}],
+   wm:{ox:1790,oy:235},start:{x:40,y:380}},
+
+  // 3 The Basement
+  {name:'The Basement',bg:'#050510',w:2000,
+   plats:[
+     {x:0,y:160,w:280,h:20,c:'#444'},
+     {x:280,y:180,w:50,h:20,c:'#555'},{x:330,y:210,w:50,h:20,c:'#555'},
+     {x:380,y:240,w:50,h:20,c:'#555'},{x:430,y:270,w:50,h:20,c:'#555'},
+     {x:480,y:300,w:50,h:20,c:'#555'},{x:530,y:330,w:50,h:20,c:'#555'},
+     {x:580,y:360,w:50,h:20,c:'#555'},{x:630,y:390,w:50,h:20,c:'#555'},
+     {x:680,y:420,w:1320,h:80,c:'#333'},
+     {x:900,y:380,w:60,h:45,c:'#4a3a2a'},{x:1200,y:380,w:60,h:45,c:'#4a3a2a'},{x:1600,y:380,w:60,h:45,c:'#4a3a2a'},
+     {x:780,y:395,w:20,h:30,c:'#777'},{x:1050,y:380,w:20,h:45,c:'#777'},{x:1400,y:380,w:20,h:45,c:'#777'},{x:1800,y:380,w:20,h:45,c:'#777'},
+     {x:850,y:340,w:100,h:15,c:'#556'},{x:1100,y:300,w:120,h:15,c:'#556'},
+     {x:1350,y:340,w:100,h:15,c:'#556'},{x:1580,y:290,w:120,h:15,c:'#556'},{x:1800,y:340,w:100,h:15,c:'#556'},
+   ],
+   cats:[{ox:700,oy:380,vx:2.2,minX:690,maxX:1980},{ox:1100,oy:380,vx:-1.8,minX:690,maxX:1980},{ox:1500,oy:380,vx:1.6,minX:690,maxX:1980},{ox:1800,oy:380,vx:-2.0,minX:690,maxX:1980}],
+   laundry:[{ox:100,oy:135,c:'#e74c3c'},{ox:200,oy:135,c:'#3498db'},{ox:870,oy:320,c:'#f39c12'},{ox:1110,oy:282,c:'#9b59b6'},{ox:1590,oy:270,c:'#2ecc71'},{ox:1810,oy:320,c:'#ff6b9d'}],
+   bones:[{ox:150,oy:135,t:'life'},{ox:1350,oy:320,t:'speed'},{ox:1820,oy:320,t:'life'}],
+   wm:{ox:1900,oy:360},start:{x:40,y:100}},
+
+  // 4 Bedroom
+  {name:'The Bedroom',bg:'#160d26',w:1650,
+   plats:[
+     {x:0,y:440,w:450,h:60,c:'#4a3060'},{x:480,y:440,w:400,h:60,c:'#4a3060'},{x:910,y:440,w:740,h:60,c:'#4a3060'},
+     {x:60,y:390,w:280,h:55,c:'#2d1b4e'},{x:60,y:375,w:280,h:18,c:'#9b59b6'},
+     {x:360,y:410,w:60,h:35,c:'#3d2b5e'},{x:980,y:385,w:100,h:60,c:'#3d2b5e'},
+     {x:200,y:320,w:100,h:15,c:'#6a4a8a'},{x:480,y:290,w:120,h:15,c:'#6a4a8a'},
+     {x:700,y:330,w:100,h:15,c:'#6a4a8a'},{x:900,y:270,w:120,h:15,c:'#6a4a8a'},
+     {x:1130,y:310,w:100,h:15,c:'#6a4a8a'},{x:1360,y:270,w:130,h:15,c:'#6a4a8a'},{x:1540,y:320,w:90,h:15,c:'#6a4a8a'},
+   ],
+   cats:[{ox:490,oy:400,vx:1.4,minX:485,maxX:875},{ox:920,oy:400,vx:-1.7,minX:915,maxX:1630},{ox:200,oy:300,vx:1.2,minX:0,maxX:440}],
+   laundry:[{ox:210,oy:302,c:'#e74c3c'},{ox:495,oy:272,c:'#00bcd4'},{ox:710,oy:312,c:'#ff9800'},{ox:1000,oy:255,c:'#8bc34a'},{ox:1370,oy:252,c:'#e91e63'},{ox:1550,oy:302,c:'#ffd700'}],
+   bones:[{ox:490,oy:272,t:'speed'},{ox:1140,oy:292,t:'life'}],
+   wm:{ox:1580,oy:385},start:{x:40,y:380}},
+
+  // 5 Garage
+  {name:'The Garage',bg:'#0f0f18',w:1900,
+   plats:[
+     {x:0,y:440,w:500,h:60,c:'#555560'},{x:530,y:440,w:500,h:60,c:'#555560'},{x:1060,y:440,w:840,h:60,c:'#555560'},
+     {x:60,y:380,w:360,h:65,c:'#2a3a5a'},{x:60,y:362,w:240,h:22,c:'#3a5a8a'},
+     {x:580,y:380,w:360,h:65,c:'#3a2a1a'},{x:630,y:362,w:240,h:22,c:'#6a4a2a'},
+     {x:1100,y:370,w:120,h:15,c:'#6a6a80'},{x:1300,y:330,w:120,h:15,c:'#6a6a80'},
+     {x:1500,y:370,w:120,h:15,c:'#6a6a80'},{x:1700,y:320,w:130,h:15,c:'#6a6a80'},
+     {x:450,y:290,w:60,h:15,c:'#6a6a80'},{x:990,y:310,w:60,h:15,c:'#6a6a80'},
+   ],
+   cats:[{ox:540,oy:400,vx:1.8,minX:530,maxX:1040},{ox:1080,oy:400,vx:2.0,minX:1070,maxX:1870},{ox:1500,oy:400,vx:-1.6,minX:1070,maxX:1870}],
+   laundry:[{ox:440,oy:380,c:'#e74c3c'},{ox:460,oy:272,c:'#3498db'},{ox:1000,oy:292,c:'#f39c12'},{ox:1110,oy:352,c:'#9b59b6'},{ox:1510,oy:352,c:'#00e5ff'},{ox:1710,oy:302,c:'#ff6b9d'}],
+   bones:[{ox:990,oy:292,t:'life'},{ox:1700,oy:302,t:'speed'}],
+   wm:{ox:1820,oy:385},start:{x:40,y:380}},
+
+  // 6 Attic
+  {name:'The Attic',bg:'#0a0808',w:1800,
+   plats:[
+     {x:0,y:440,w:250,h:60,c:'#5a4a3a'},
+     {x:280,y:420,w:80,h:15,c:'#7a6a5a'},{x:400,y:390,w:80,h:15,c:'#7a6a5a'},
+     {x:530,y:360,w:80,h:15,c:'#7a6a5a'},{x:660,y:330,w:80,h:15,c:'#7a6a5a'},
+     {x:790,y:300,w:80,h:15,c:'#7a6a5a'},{x:920,y:270,w:80,h:15,c:'#7a6a5a'},
+     {x:1050,y:300,w:80,h:15,c:'#7a6a5a'},{x:1180,y:330,w:80,h:15,c:'#7a6a5a'},
+     {x:1310,y:300,w:80,h:15,c:'#7a6a5a'},{x:1440,y:270,w:80,h:15,c:'#7a6a5a'},
+     {x:1570,y:300,w:80,h:15,c:'#7a6a5a'},{x:1700,y:330,w:100,h:15,c:'#7a6a5a'},
+     {x:100,y:415,w:70,h:30,c:'#4a3a2a'},{x:1710,y:310,w:60,h:25,c:'#4a3a2a'},
+   ],
+   cats:[{ox:800,oy:282,vx:1.5,minX:280,maxX:1760},{ox:500,oy:342,vx:-2,minX:280,maxX:1760},{ox:1300,oy:282,vx:1.8,minX:280,maxX:1760}],
+   laundry:[{ox:100,oy:398,c:'#e74c3c'},{ox:410,oy:372,c:'#3498db'},{ox:800,oy:282,c:'#f39c12'},{ox:1055,oy:282,c:'#9b59b6'},{ox:1450,oy:252,c:'#2ecc71'},{ox:1720,oy:312,c:'#ff6b9d'}],
+   bones:[{ox:660,oy:312,t:'speed'},{ox:1310,oy:282,t:'life'}],
+   wm:{ox:1720,oy:278},start:{x:40,y:380}},
+
+  // 7 Utility Room
+  {name:'Utility Room',bg:'#0d1a1a',w:1600,
+   plats:[
+     {x:0,y:440,w:350,h:60,c:'#2a4a4a'},{x:380,y:440,w:300,h:60,c:'#2a4a4a'},
+     {x:710,y:440,w:350,h:60,c:'#2a4a4a'},{x:1090,y:440,w:510,h:60,c:'#2a4a4a'},
+     {x:100,y:370,w:200,h:14,c:'#5a8a8a'},{x:420,y:340,w:160,h:14,c:'#5a8a8a'},
+     {x:700,y:300,w:150,h:14,c:'#5a8a8a'},{x:950,y:340,w:150,h:14,c:'#5a8a8a'},
+     {x:1200,y:300,w:160,h:14,c:'#5a8a8a'},{x:1430,y:340,w:120,h:14,c:'#5a8a8a'},
+     {x:80,y:390,w:80,h:55,c:'#3a6a6a'},{x:760,y:390,w:80,h:55,c:'#3a6a6a'},{x:1130,y:390,w:80,h:55,c:'#3a6a6a'},
+   ],
+   cats:[{ox:390,oy:400,vx:1.6,minX:385,maxX:690},{ox:720,oy:400,vx:1.8,minX:715,maxX:1070},{ox:1100,oy:400,vx:-2,minX:1095,maxX:1570},{ox:750,oy:282,vx:1.5,minX:710,maxX:1080}],
+   laundry:[{ox:110,oy:352,c:'#ff6b9d'},{ox:430,oy:322,c:'#87ceeb'},{ox:710,oy:282,c:'#ffd700'},{ox:960,oy:322,c:'#98fb98'},{ox:1210,oy:282,c:'#dda0dd'},{ox:1440,oy:322,c:'#f0e68c'}],
+   bones:[{ox:200,oy:352,t:'life'},{ox:1440,oy:322,t:'speed'}],
+   wm:{ox:1520,oy:385},start:{x:40,y:380}},
+
+  // 8 Kids' Room
+  {name:"Kids' Room",bg:'#1a1040',w:1750,
+   plats:[
+     {x:0,y:440,w:400,h:60,c:'#3a6abf'},{x:430,y:440,w:380,h:60,c:'#3a6abf'},{x:840,y:440,w:910,h:60,c:'#3a6abf'},
+     {x:30,y:400,w:130,h:44,c:'#e84393'},{x:600,y:390,w:170,h:54,c:'#f8a030'},{x:900,y:400,w:120,h:44,c:'#50c050'},
+     {x:600,y:340,w:170,h:12,c:'#f0c040'},
+     {x:200,y:350,w:90,h:14,c:'#e84393'},{x:400,y:310,w:90,h:14,c:'#50c0ff'},
+     {x:680,y:270,w:90,h:14,c:'#f8a030'},{x:880,y:310,w:90,h:14,c:'#e84393'},
+     {x:1100,y:270,w:90,h:14,c:'#50c0ff'},{x:1320,y:310,w:90,h:14,c:'#50c050'},
+     {x:1530,y:260,w:100,h:14,c:'#f8a030'},{x:1680,y:310,w:80,h:14,c:'#e84393'},
+   ],
+   cats:[{ox:440,oy:400,vx:1.4,minX:435,maxX:810},{ox:850,oy:400,vx:1.6,minX:845,maxX:1730},{ox:400,oy:293,vx:1.2,minX:200,maxX:770},{ox:1100,oy:253,vx:-1.8,minX:875,maxX:1730}],
+   laundry:[{ox:50,oy:382,c:'#e74c3c'},{ox:210,oy:332,c:'#3498db'},{ox:690,oy:252,c:'#ffd700'},{ox:1110,oy:252,c:'#ff6b9d'},{ox:1540,oy:242,c:'#00e676'},{ox:1690,oy:292,c:'#f39c12'}],
+   bones:[{ox:410,oy:292,t:'speed'},{ox:1330,oy:292,t:'life'}],
+   wm:{ox:1680,oy:380},start:{x:40,y:380}},
+
+  // 9 Backyard
+  {name:'The Backyard',bg:'#0a1f0a',w:2000,
+   plats:[
+     {x:0,y:440,w:2000,h:60,c:'#2d5a1b'},
+     {x:80,y:410,w:40,h:35,c:'#5a3a1a'},{x:200,y:400,w:80,h:45,c:'#2d8a1b'},
+     {x:400,y:390,w:60,h:55,c:'#5a3a1a'},{x:600,y:380,w:100,h:65,c:'#2d8a1b'},
+     {x:800,y:400,w:60,h:45,c:'#5a3a1a'},{x:1000,y:390,w:80,h:55,c:'#2d8a1b'},
+     {x:1200,y:400,w:60,h:45,c:'#5a3a1a'},{x:1400,y:380,w:80,h:65,c:'#2d8a1b'},
+     {x:1600,y:400,w:60,h:45,c:'#5a3a1a'},{x:1800,y:390,w:100,h:55,c:'#2d8a1b'},
+     {x:150,y:360,w:100,h:15,c:'#8a6a4a'},{x:350,y:320,w:110,h:15,c:'#8a6a4a'},
+     {x:560,y:360,w:100,h:15,c:'#8a6a4a'},{x:730,y:300,w:120,h:15,c:'#8a6a4a'},
+     {x:950,y:340,w:100,h:15,c:'#8a6a4a'},{x:1130,y:290,w:120,h:15,c:'#8a6a4a'},
+     {x:1350,y:330,w:100,h:15,c:'#8a6a4a'},{x:1540,y:280,w:120,h:15,c:'#8a6a4a'},
+     {x:1730,y:330,w:110,h:15,c:'#8a6a4a'},{x:1900,y:280,w:100,h:15,c:'#8a6a4a'},
+   ],
+   cats:[{ox:200,oy:400,vx:2.0,minX:10,maxX:1980},{ox:800,oy:400,vx:-1.8,minX:10,maxX:1980},{ox:1300,oy:400,vx:2.2,minX:10,maxX:1980},{ox:1700,oy:400,vx:-2.0,minX:10,maxX:1980}],
+   laundry:[{ox:160,oy:342,c:'#e74c3c'},{ox:360,oy:302,c:'#3498db'},{ox:740,oy:282,c:'#f39c12'},{ox:1140,oy:272,c:'#9b59b6'},{ox:1550,oy:262,c:'#2ecc71'},{ox:1910,oy:262,c:'#ff6b9d'},{ox:960,oy:322,c:'#ffd700'}],
+   bones:[{ox:560,oy:342,t:'life'},{ox:1350,oy:312,t:'speed'},{ox:1740,oy:312,t:'life'}],
+   wm:{ox:1920,oy:255},start:{x:40,y:380}},
+];
+
+// ── BUILD LEVELS ──────────────────────────────────────────────
+let LEVELS = [];
+
+function shuffle(a){ const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; }
+
+function buildLevels() {
+  const order = shuffle(POOL);
+  LEVELS = order.map((t, i) => {
+    const spd = 1 + i * 0.13;
+    return {
+      name: `Level ${i+1} — ${t.name}`,
+      roomName: t.name,
+      bg: t.bg,
+      width: t.w,
+      plats: t.plats.map(p=>({...p})),
+      cats: t.cats.map(c=>({x:c.ox,y:c.oy,vx:c.vx*spd,minX:c.minX,maxX:c.maxX,frame:0,ox:c.ox,oy:c.oy,ovx:c.vx*spd})),
+      laundry: t.laundry.map(l=>({x:l.ox,y:l.oy,color:l.c,collected:false,ox:l.ox,oy:l.oy})),
+      bones: t.bones.map(b=>({x:b.ox,y:b.oy,type:b.t,collected:false,ox:b.ox,oy:b.oy})),
+      wm: {...t.wm},
+      start: {...t.start},
+    };
+  });
+}
+
+// ── DRAW HELPERS ─────────────────────────────────────────────
+function drawBg(level){
+  ctx.fillStyle=level.bg; ctx.fillRect(0,0,800,500);
+  ctx.fillStyle='rgba(0,0,0,0.07)';
+  for(let y=0;y<500;y+=4) ctx.fillRect(0,y,800,2);
+}
+
+function drawPlat(p){
+  const sx=p.x-cam.x;
+  if(sx+p.w<0||sx>800) return;
+  ctx.fillStyle=p.c||'#888'; ctx.fillRect(sx,p.y,p.w,p.h);
+  ctx.fillStyle='rgba(255,255,255,0.13)'; ctx.fillRect(sx,p.y,p.w,3);
+  ctx.fillStyle='rgba(0,0,0,0.22)'; ctx.fillRect(sx,p.y+p.h-3,p.w,3);
+}
+
+function drawPip(x,y,facing,frame,inv){
+  const sx=Math.floor(x-cam.x), sy=Math.floor(y);
+  if(inv>0&&Math.floor(Date.now()/80)%2===0) return;
+  const P=2,f=facing,bob=frame%2===0?0:1,t=Date.now();
+  const px=cx=>sx+(f===1?cx:(14-cx))*P;
+  const py=cy=>sy+cy*P+bob;
+  // body
+  ctx.fillStyle='#f5f5f5';
+  [[3,8],[4,8],[5,8],[6,8],[7,8],[8,8],[9,8],[10,8],[11,8],
+   [2,10],[3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],
+   [2,12],[3,12],[4,12],[5,12],[6,12],[7,12],[8,12],[9,12],[10,12],[11,12],[12,12],
+   [3,14],[4,14],[5,14],[6,14],[7,14],[8,14],[9,14],[10,14],[11,14],
+   // head
+   [4,2],[5,2],[6,2],[7,2],[8,2],[9,2],
+   [3,4],[4,4],[5,4],[6,4],[7,4],[8,4],[9,4],[10,4],
+   [3,6],[4,6],[5,6],[6,6],[7,6],[8,6],[9,6],[10,6],
+  ].forEach(([cx,cy])=>ctx.fillRect(px(cx),py(cy),P,P));
+  // spots
+  ctx.fillStyle='#8B4513';
+  [[5,10],[6,10],[5,12],[10,10],[9,12],[10,12]].forEach(([cx,cy])=>ctx.fillRect(px(cx),py(cy),P,P));
+  // eye
+  ctx.fillStyle='#111'; ctx.fillRect(px(9),py(4),P,P);
+  // nose
+  ctx.fillStyle='#ff6699'; ctx.fillRect(px(10),py(7),P,P);
+  // ear
+  ctx.fillStyle='#c8a882'; ctx.fillRect(px(2),py(2),P*2,P*3);
+  // legs
+  ctx.fillStyle='#e8e8e8';
+  const lo=frame%2===0;
+  ctx.fillRect(px(4),py(15)+(lo?0:-P),P*2,P*2);
+  ctx.fillRect(px(9),py(15)+(lo?-P:0),P*2,P*2);
+  // tail
+  ctx.fillStyle='#f0f0f0';
+  const wag=Math.sin(t/150)*3;
+  ctx.fillRect(f===1?sx:sx+14*P,sy+10*P+bob+wag,P,P*3);
+}
+
+function drawCat(cat){
+  const sx=Math.floor(cat.x-cam.x),sy=Math.floor(cat.y);
+  if(sx+32<0||sx>800) return;
+  const P=2,f=cat.vx>=0?1:-1,bob=Math.floor(cat.frame/4)%2===0?0:1;
+  const t=Date.now();
+  ctx.fillStyle='#d4612a';
+  [[2,8],[3,8],[4,8],[5,8],[6,8],[7,8],[8,8],[9,8],[10,8],[11,8],
+   [2,10],[3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],
+   [2,12],[3,12],[4,12],[5,12],[6,12],[7,12],[8,12],[9,12],[10,12],[11,12],
+   [3,2],[4,2],[5,2],[6,2],[7,2],[8,2],[9,2],[10,2],
+   [3,4],[4,4],[5,4],[6,4],[7,4],[8,4],[9,4],[10,4],
+   [3,6],[4,6],[5,6],[6,6],[7,6],[8,6],[9,6],[10,6],
+  ].forEach(([cx,cy])=>{const rx=f===1?cx:(13-cx);ctx.fillRect(sx+rx*P,sy+cy*P+bob,P,P);});
+  ctx.fillStyle='#d4612a';
+  ctx.fillRect(f===1?sx+3*P:sx+8*P,sy+bob,P*2,P*2);
+  ctx.fillRect(f===1?sx+9*P:sx+2*P,sy+bob,P*2,P*2);
+  ctx.fillStyle='#a33e15';
+  [[4,9],[7,9],[10,9]].forEach(([cx,cy])=>{const rx=f===1?cx:(13-cx);ctx.fillRect(sx+rx*P,sy+cy*P+bob,P,P*3);});
+  ctx.fillStyle='#00ff44';
+  ctx.fillRect(f===1?sx+9*P:sx+3*P,sy+4*P+bob,P,P);
+  ctx.fillStyle='#c05020';
+  const tw=Math.sin(t/200+cat.x*0.01)*4;
+  ctx.fillRect(f===1?sx:sx+12*P,sy+10*P+tw+bob,P,P*4);
+  const ll=Math.floor(cat.frame/4)%2===0;
+  ctx.fillRect(f===1?sx+3*P:sx+9*P,sy+13*P+bob+(ll?0:-P),P*2,P*2);
+  ctx.fillRect(f===1?sx+9*P:sx+3*P,sy+13*P+bob+(ll?-P:0),P*2,P*2);
+}
+
+function drawLaundry(item){
+  if(item.collected) return;
+  const sx=Math.floor(item.x-cam.x),sy=Math.floor(item.y);
+  if(sx<-30||sx>830) return;
+  const bob=Math.sin(Date.now()/400+item.x*0.01)*3;
+  ctx.fillStyle=item.color;
+  ctx.fillRect(sx,sy+bob,20,14); ctx.fillRect(sx+4,sy-4+bob,12,6);
+  ctx.fillStyle='rgba(255,255,255,0.28)'; ctx.fillRect(sx+2,sy+2+bob,4,2);
+  if(Math.floor(Date.now()/300)%2===0){ctx.fillStyle='#fff';ctx.fillRect(sx+22,sy-2+bob,2,2);}
+}
+
+function drawBone(bone){
+  if(bone.collected) return;
+  const sx=Math.floor(bone.x-cam.x),sy=Math.floor(bone.y);
+  if(sx<-40||sx>840) return;
+  const bob=Math.sin(Date.now()/300+bone.x*0.1)*3;
+  const col=bone.type==='life'?'#ff6b9d':'#87ceeb';
+  ctx.fillStyle=col;
+  ctx.fillRect(sx+4,sy+8+bob,14,6);
+  ctx.fillRect(sx,sy+6+bob,8,10); ctx.fillRect(sx+14,sy+6+bob,8,10);
+  ctx.fillStyle='rgba(255,255,255,0.55)';
+  ctx.fillRect(sx+2,sy+8+bob,3,3); ctx.fillRect(sx+17,sy+8+bob,3,3);
+  ctx.fillStyle=col; ctx.font='bold 9px monospace';
+  ctx.fillText(bone.type==='life'?'+1♥':'ZAP',sx-2,sy+5+bob);
+}
+
+function drawWM(wm){
+  const sx=Math.floor(wm.ox-cam.x),sy=Math.floor(wm.oy);
+  if(sx+70<0||sx>860) return;
+  ctx.fillStyle='#e8e8e8'; ctx.fillRect(sx,sy,60,70);
+  ctx.fillStyle='#cccccc'; ctx.fillRect(sx,sy,60,10);
+  ctx.fillStyle='#87ceeb';
+  ctx.beginPath(); ctx.arc(sx+30,sy+42,18,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#888'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(sx+30,sy+42,18,0,Math.PI*2); ctx.stroke();
+  const sp=Date.now()/300;
+  ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(sx+30+Math.cos(sp)*10,sy+42+Math.sin(sp)*10);
+  ctx.lineTo(sx+30+Math.cos(sp+Math.PI)*10,sy+42+Math.sin(sp+Math.PI)*10);
+  ctx.stroke();
+  ctx.fillStyle='#999'; ctx.fillRect(sx+5,sy+3,8,5); ctx.fillRect(sx+20,sy+3,5,5);
+  ctx.shadowColor='#00ff88'; ctx.shadowBlur=12;
+  ctx.strokeStyle='#00ff88'; ctx.lineWidth=2;
+  ctx.strokeRect(sx-3,sy-3,66,76);
+  ctx.shadowBlur=0; ctx.lineWidth=1;
+  ctx.fillStyle='#00ff88'; ctx.font='bold 10px monospace'; ctx.textAlign='center';
+  ctx.fillText('GOAL!',sx+30,sy-6); ctx.textAlign='left';
+}
+
+// ── PHYSICS ───────────────────────────────────────────────────
+function overlap(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
+
+function updatePlayer(level){
+  const spd=speedBoost>0?5.5:3.5;
+  if(K['ArrowLeft']){PL.vx=-spd;PL.facing=-1;}
+  else if(K['ArrowRight']){PL.vx=spd;PL.facing=1;}
+  else PL.vx=0;
+  const jump=K['ArrowUp']||K['Space']||K['KeyZ'];
+  if(jump&&PL.onGround&&!PL.jumping){PL.vy=-12;PL.onGround=false;PL.jumping=true;sfx.jump();}
+  if(!jump) PL.jumping=false;
+  PL.vy=Math.min(PL.vy+0.55,14);
+  PL.x=Math.max(0,Math.min(PL.x+PL.vx,level.width-PL.w));
+  PL.y+=PL.vy;
+  for(const p of level.plats){
+    if(overlap(PL.x,PL.y+4,PL.w,PL.h-4,p.x,p.y,p.w,p.h)){
+      PL.x=PL.vx>0?p.x-PL.w:p.x+p.w; PL.vx=0;
+    }
+  }
+  PL.onGround=false;
+  for(const p of level.plats){
+    if(overlap(PL.x+2,PL.y,PL.w-4,PL.h,p.x,p.y,p.w,p.h)){
+      if(PL.vy>0){PL.y=p.y-PL.h;PL.vy=0;PL.onGround=true;}
+      else{PL.y=p.y+p.h;PL.vy=0;}
+    }
+  }
+  if(PL.y>620) hitCat(true); // fell off = death hit
+  if(++PL.at>8){PL.at=0;if(PL.onGround&&PL.vx!==0){PL.af++;sfx.step();}}
+  cam.x=Math.max(0,Math.min(PL.x-380,level.width-800));
+}
+
+function updateCats(cats){
+  cats.forEach(c=>{
+    c.x+=c.vx; c.frame++;
+    if(c.x<=c.minX){c.x=c.minX;c.vx=Math.abs(c.vx);}
+    if(c.x>=c.maxX){c.x=c.maxX;c.vx=-Math.abs(c.vx);}
+  });
+}
+
+function hitCat(fell){
+  if(invincible>0&&!fell) return;
+  lives--;
+  sfx.cat();
+  invincible=140;
+  if(lives<=0){
+    showMsg('💀 No more lives!');
+    sfx.gameover();
+    setTimeout(()=>{gState='gameover';showOverlay('gameover');},1300);
+  } else {
+    showMsg(`🐱 Ouch! ${lives} ${lives===1?'life':'lives'} left`);
+    // Bounce in place — DO NOT reset position
+    if(fell){const lv=LEVELS[lvlIdx];PL.x=lv.start.x;PL.y=lv.start.y;}
+    PL.vy=-8; PL.vx=PL.facing*-4;
+  }
+}
+
+function checkCollisions(level){
+  if(gState!=='playing') return;
+  level.laundry.forEach(item=>{
+    if(!item.collected&&overlap(PL.x,PL.y,PL.w,PL.h,item.x,item.y,22,16)){
+      item.collected=true; laundryColl++;
+      sfx.collect(); showMsg(`🧺 Laundry! (${laundryColl}/${laundryTot})`);
+    }
+  });
+  level.bones.forEach(bone=>{
+    if(!bone.collected&&overlap(PL.x,PL.y,PL.w,PL.h,bone.x,bone.y,22,22)){
+      bone.collected=true; sfx.bone();
+      if(bone.type==='life'){lives++;showMsg('❤️ Extra life!');}
+      else{speedBoost=300;showMsg('⚡ Speed boost!');}
+    }
+  });
+  // Reach washer = finish level (no laundry requirement!)
+  const wm=level.wm;
+  if(overlap(PL.x,PL.y,PL.w,PL.h,wm.ox,wm.oy,60,70)){
+    gState='celebrating'; celebTimer=0; sfx.win();
+  }
+  if(invincible<=0){
+    level.cats.forEach(cat=>{
+      if(overlap(PL.x+4,PL.y+4,PL.w-8,PL.h-8,cat.x,cat.y,28,30)) hitCat(false);
+    });
+  }
+  if(speedBoost>0) speedBoost--;
+  if(invincible>0) invincible--;
+}
+
+// ── HUD ───────────────────────────────────────────────────────
+function updateHUD(){
+  document.getElementById('uiLives').textContent='❤️'.repeat(Math.max(0,lives))||'💀';
+  document.getElementById('uiLevel').textContent=`Level ${lvlIdx+1} / ${LEVELS.length}`;
+  document.getElementById('uiRoom').textContent=LEVELS[lvlIdx].roomName;
+  document.getElementById('uiLaundry').textContent=`${laundryColl} / ${laundryTot}`;
+  document.getElementById('uiScore').textContent=totalScore+(laundryColl*10);
+}
+
+function showMsg(txt){
+  const el=document.getElementById('floatMsg');
+  el.textContent=txt; el.style.opacity='1'; msgTimer=140;
+}
+function tickMsg(){if(msgTimer>0&&--msgTimer<=0)document.getElementById('floatMsg').style.opacity='0';}
+
+// ── OVERLAYS ──────────────────────────────────────────────────
+function showOverlay(type){
+  const o=document.getElementById('overlay'); o.style.display='flex';
+  const lv=LEVELS[lvlIdx];
+  const pts=laundryColl*10;
+  const pct=laundryTot>0?Math.round(laundryColl/laundryTot*100):0;
+  const grade=laundryColl===laundryTot?'⭐⭐⭐':laundryColl>=laundryTot*0.67?'⭐⭐':laundryColl>0?'⭐':'—';
+  const isLast=lvlIdx>=LEVELS.length-1;
+  const ts=totalScore+pts;
+
+  if(type==='levelcomplete'){
+    o.innerHTML=`
+      <h1 style="font-size:34px">LEVEL CLEAR! 🎉</h1>
+      <div class="sub">Nice work, Pip! — ${lv.roomName}</div>
+      <div class="score-grid">
+        <div>Laundry collected:</div><div class="sv">${laundryColl} / ${laundryTot} &nbsp;${grade}</div>
+        <div>Laundry bonus:</div><div class="sv">+${pts} pts</div>
+        <div>Running total:</div><div class="sv">${ts} pts</div>
+        <div>Lives left:</div><div class="sv">${'❤️'.repeat(Math.max(0,lives))}</div>
+      </div>
+      <div class="btn-row">
+        ${isLast
+          ?'<button onclick="showFinalWin()">FINAL RESULTS 🏆</button>'
+          :'<button onclick="nextLevel()">NEXT LEVEL ▶</button>'}
+      </div>`;
+  } else if(type==='gameover'){
+    o.innerHTML=`
+      <h1 style="color:#ff4444;font-size:40px">GAME OVER</h1>
+      <div class="sub" style="color:#aaa">The cats win this time...</div>
+      <div class="box">
+        Poor Pip ran out of lives! 😢<br>
+        <strong style="color:#ffd700">Final Score: ${totalScore} pts</strong><br>
+        Levels completed: ${lvlIdx} / ${LEVELS.length}
+      </div>
+      <div class="btn-row"><button onclick="startGame()">TRY AGAIN</button></div>`;
+  } else if(type==='win'){
+    const s=totalScore;
+    const rating=s>900?'🏆 GRAND CHAMPION!':s>600?'🥇 Amazing!':s>300?'🥈 Well done!':'🥉 Pip tried!';
+    o.innerHTML=`
+      <h1 style="font-size:36px">🎊 YOU WIN! 🎊</h1>
+      <div class="sub">Pip is the best laundry dog in the whole house!</div>
+      <div class="box">
+        All ${LEVELS.length} rooms completed! 🐾<br>
+        <strong style="color:#ffd700;font-size:24px">Final Score: ${s} pts</strong><br>
+        <span style="font-size:22px">${rating}</span><br><br>
+        <span style="color:#aaa;font-size:11px">Rooms shuffle every game — try again for a new adventure!</span>
+      </div>
+      <div class="btn-row"><button onclick="startGame()">PLAY AGAIN</button></div>`;
+  }
+}
+function showFinalWin(){ totalScore+=laundryColl*10; showOverlay('win'); gState='overlay'; }
+function hideOverlay(){ document.getElementById('overlay').style.display='none'; }
+
+// ── GAME CONTROL ──────────────────────────────────────────────
+function loadLevel(idx){
+  lvlIdx=idx;
+  const lv=LEVELS[idx];
+  PL.x=lv.start.x; PL.y=lv.start.y;
+  PL.vx=0; PL.vy=0; PL.af=0; PL.facing=1;
+  cam.x=0; laundryColl=0; laundryTot=lv.laundry.length;
+  invincible=0; speedBoost=0; celebTimer=0;
+  lv.laundry.forEach(l=>l.collected=false);
+  lv.bones.forEach(b=>b.collected=false);
+  lv.cats.forEach(c=>{c.x=c.ox;c.y=c.oy;c.vx=c.ovx;c.frame=0;});
+  gState='playing'; hideOverlay();
+  document.getElementById('floatMsg').style.opacity='0'; msgTimer=0;
+}
+
+function nextLevel(){
+  totalScore+=laundryColl*10;
+  hideOverlay();
+  loadLevel(lvlIdx+1);
+}
+
+function startGame(){
+  initAudio(); buildLevels();
+  lives=3; totalScore=0; loadLevel(0);
+}
+
+// ── CELEBRATION ───────────────────────────────────────────────
+const EMOJIS=['🎉','✨','⭐','🦴','🧺','🐾'];
+function drawCelebration(){
+  const lv=LEVELS[lvlIdx];
+  drawBg(lv); lv.plats.forEach(p=>drawPlat(p));
+  lv.laundry.forEach(l=>drawLaundry(l));
+  drawWM(lv.wm);
+  drawPip(PL.x,PL.y,PL.facing,Math.floor(Date.now()/100),0);
+  updateHUD(); celebTimer++;
+  ctx.font='26px serif';
+  for(let i=0;i<10;i++){
+    const t=(celebTimer+i*25)*0.05;
+    ctx.fillText(EMOJIS[i%6],400+Math.sin(t+i*1.1)*200,240+Math.cos(t*0.7+i)*100);
+  }
+  ctx.fillStyle='#ffd700'; ctx.font='bold 30px monospace'; ctx.textAlign='center';
+  ctx.shadowColor='#ffd700'; ctx.shadowBlur=10;
+  ctx.fillText('LEVEL CLEAR! 🎊',400,215);
+  const pts=laundryColl*10;
+  ctx.font='bold 16px monospace'; ctx.fillStyle='#fff';
+  ctx.fillText(`Laundry: ${laundryColl}/${laundryTot}  •  +${pts} pts`,400,248);
+  ctx.shadowBlur=0; ctx.textAlign='left';
+  if(celebTimer>165){ showOverlay('levelcomplete'); gState='overlay'; }
+}
+
+// ── TITLE SCREEN ─────────────────────────────────────────────
+(function titleLoop(){
+  if(gState!=='menu') return;
+  const t=Date.now()*0.001;
+  ctx.fillStyle='#1a0a2e'; ctx.fillRect(0,0,800,500);
+  for(let i=0;i<60;i++){
+    ctx.fillStyle=`rgba(255,255,255,${(Math.sin(t*2+i)*0.5+0.5)*0.55})`;
+    ctx.fillRect((Math.sin(i*127.3)*0.5+0.5)*800,(Math.sin(i*93.7)*0.5+0.5)*500,2,2);
+  }
+  cam.x=0;
+  drawPip(340+Math.sin(t)*30,360,1,Math.floor(t*4),0);
+  drawWM({ox:450,oy:350});
+  requestAnimationFrame(titleLoop);
+})();
+
+// ── MAIN LOOP ─────────────────────────────────────────────────
+function gameLoop(){
+  const lv=lvlIdx<LEVELS.length?LEVELS[lvlIdx]:null;
+  if(gState==='playing'&&lv){
+    drawBg(lv);
+    lv.plats.forEach(p=>drawPlat(p));
+    lv.laundry.forEach(l=>drawLaundry(l));
+    lv.bones.forEach(b=>drawBone(b));
+    drawWM(lv.wm);
+    lv.cats.forEach(c=>drawCat(c));
+    drawPip(PL.x,PL.y,PL.facing,Math.floor(PL.af),invincible);
+    updatePlayer(lv); updateCats(lv.cats); checkCollisions(lv);
+    updateHUD(); tickMsg();
+  } else if(gState==='celebrating'){
+    drawCelebration(); tickMsg();
+  }
+  requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
