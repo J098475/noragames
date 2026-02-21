@@ -491,7 +491,11 @@ function drawWM(wm){
 // ── PHYSICS ───────────────────────────────────────────────────
 function overlap(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
 
+// Flag to prevent fall damage from firing every frame while below screen
+let hasFallen = false;
+
 function updatePlayer(level){
+  if(gState!=='playing') return;
   const spd=speedBoost>0?5.5:3.5;
   if(K['ArrowLeft']){PL.vx=-spd;PL.facing=-1;}
   else if(K['ArrowRight']){PL.vx=spd;PL.facing=1;}
@@ -502,11 +506,13 @@ function updatePlayer(level){
   PL.vy=Math.min(PL.vy+0.55,14);
   PL.x=Math.max(0,Math.min(PL.x+PL.vx,level.width-PL.w));
   PL.y+=PL.vy;
+  // X collision
   for(const p of level.plats){
     if(overlap(PL.x,PL.y+4,PL.w,PL.h-4,p.x,p.y,p.w,p.h)){
       PL.x=PL.vx>0?p.x-PL.w:p.x+p.w; PL.vx=0;
     }
   }
+  // Y collision
   PL.onGround=false;
   for(const p of level.plats){
     if(overlap(PL.x+2,PL.y,PL.w-4,PL.h,p.x,p.y,p.w,p.h)){
@@ -514,12 +520,19 @@ function updatePlayer(level){
       else{PL.y=p.y+p.h;PL.vy=0;}
     }
   }
-  if(PL.y>620) hitCat(true); // fell off = death hit
+  // Reset hasFallen when back on solid ground
+  if(PL.onGround) hasFallen=false;
+  // Fell off bottom of screen — only trigger ONCE per fall using hasFallen flag
+  if(PL.y>580&&!hasFallen){
+    hasFallen=true;
+    takeDamage(true);
+  }
   if(++PL.at>8){PL.at=0;if(PL.onGround&&PL.vx!==0){PL.af++;sfx.step();}}
   cam.x=Math.max(0,Math.min(PL.x-380,level.width-800));
 }
 
 function updateCats(cats){
+  if(gState!=='playing') return;
   cats.forEach(c=>{
     c.x+=c.vx; c.frame++;
     if(c.x<=c.minX){c.x=c.minX;c.vx=Math.abs(c.vx);}
@@ -527,31 +540,46 @@ function updateCats(cats){
   });
 }
 
-function hitCat(fell){
-  if(invincible>0&&!fell) return;
+// Single unified damage function — invincibility always respected
+function takeDamage(fell){
+  // Always respect invincibility — even falls (we use hasFallen to deduplicate falls instead)
+  if(invincible>0) return;
+  if(gState!=='playing') return;
   lives--;
   sfx.cat();
-  invincible=140;
+  invincible=150;
   if(lives<=0){
+    lives=0;
     showMsg('💀 No more lives!');
     sfx.gameover();
-    setTimeout(()=>{gState='gameover';showOverlay('gameover');},1300);
+    gState='gameover'; // set immediately so no more damage can occur
+    setTimeout(()=>{ showOverlay('gameover'); },1200);
   } else {
     showMsg(`🐱 Ouch! ${lives} ${lives===1?'life':'lives'} left`);
-    // Bounce in place — DO NOT reset position
-    if(fell){const lv=LEVELS[lvlIdx];PL.x=lv.start.x;PL.y=lv.start.y;}
-    PL.vy=-8; PL.vx=PL.facing*-4;
+    if(fell){
+      // On fall, respawn at level start position
+      const lv=LEVELS[lvlIdx];
+      PL.x=lv.start.x; PL.y=lv.start.y;
+      PL.vx=0; PL.vy=0;
+      cam.x=0;
+    } else {
+      // Cat hit: just bounce back, stay in place
+      PL.vy=-7;
+      PL.vx=PL.facing*-4;
+    }
   }
 }
 
 function checkCollisions(level){
   if(gState!=='playing') return;
+  // Laundry
   level.laundry.forEach(item=>{
     if(!item.collected&&overlap(PL.x,PL.y,PL.w,PL.h,item.x,item.y,22,16)){
       item.collected=true; laundryColl++;
       sfx.collect(); showMsg(`🧺 Laundry! (${laundryColl}/${laundryTot})`);
     }
   });
+  // Bones
   level.bones.forEach(bone=>{
     if(!bone.collected&&overlap(PL.x,PL.y,PL.w,PL.h,bone.x,bone.y,22,22)){
       bone.collected=true; sfx.bone();
@@ -559,15 +587,22 @@ function checkCollisions(level){
       else{speedBoost=300;showMsg('⚡ Speed boost!');}
     }
   });
-  // Reach washer = finish level (no laundry requirement!)
-  const wm=level.wm;
-  if(overlap(PL.x,PL.y,PL.w,PL.h,wm.ox,wm.oy,60,70)){
-    gState='celebrating'; celebTimer=0; sfx.win();
+  // Washing machine — check gState again since laundry/bone collection above can't change it, but be safe
+  if(gState==='playing'){
+    const wm=level.wm;
+    if(overlap(PL.x,PL.y,PL.w,PL.h,wm.ox,wm.oy,60,70)){
+      gState='celebrating'; celebTimer=0; sfx.win();
+      return; // stop processing collisions this frame
+    }
   }
-  if(invincible<=0){
-    level.cats.forEach(cat=>{
-      if(overlap(PL.x+4,PL.y+4,PL.w-8,PL.h-8,cat.x,cat.y,28,30)) hitCat(false);
-    });
+  // Cats — only when not invincible
+  if(invincible<=0&&gState==='playing'){
+    for(const cat of level.cats){
+      if(overlap(PL.x+4,PL.y+4,PL.w-8,PL.h-8,cat.x,cat.y,28,30)){
+        takeDamage(false);
+        break; // only one cat hit per frame
+      }
+    }
   }
   if(speedBoost>0) speedBoost--;
   if(invincible>0) invincible--;
@@ -646,9 +681,11 @@ function loadLevel(idx){
   lvlIdx=idx;
   const lv=LEVELS[idx];
   PL.x=lv.start.x; PL.y=lv.start.y;
-  PL.vx=0; PL.vy=0; PL.af=0; PL.facing=1;
+  PL.vx=0; PL.vy=0; PL.af=0; PL.at=0; PL.facing=1; PL.onGround=false; PL.jumping=false;
   cam.x=0; laundryColl=0; laundryTot=lv.laundry.length;
-  invincible=0; speedBoost=0; celebTimer=0;
+  invincible=90; // grace period so Pip isn't instantly hit by a nearby cat at spawn
+  speedBoost=0; celebTimer=0;
+  hasFallen=false;
   lv.laundry.forEach(l=>l.collected=false);
   lv.bones.forEach(b=>b.collected=false);
   lv.cats.forEach(c=>{c.x=c.ox;c.y=c.oy;c.vx=c.ovx;c.frame=0;});
@@ -691,25 +728,25 @@ function drawCelebration(){
   if(celebTimer>165){ showOverlay('levelcomplete'); gState='overlay'; }
 }
 
-// ── TITLE SCREEN ─────────────────────────────────────────────
-(function titleLoop(){
-  if(gState!=='menu') return;
-  const t=Date.now()*0.001;
-  ctx.fillStyle='#1a0a2e'; ctx.fillRect(0,0,800,500);
-  for(let i=0;i<60;i++){
-    ctx.fillStyle=`rgba(255,255,255,${(Math.sin(t*2+i)*0.5+0.5)*0.55})`;
-    ctx.fillRect((Math.sin(i*127.3)*0.5+0.5)*800,(Math.sin(i*93.7)*0.5+0.5)*500,2,2);
-  }
-  cam.x=0;
-  drawPip(340+Math.sin(t)*30,360,1,Math.floor(t*4),0);
-  drawWM({ox:450,oy:350});
-  requestAnimationFrame(titleLoop);
-})();
-
-// ── MAIN LOOP ─────────────────────────────────────────────────
+// ── SINGLE UNIFIED GAME LOOP ──────────────────────────────────
 function gameLoop(){
-  const lv=lvlIdx<LEVELS.length?LEVELS[lvlIdx]:null;
-  if(gState==='playing'&&lv){
+  if(gState==='menu'){
+    const t=Date.now()*0.001;
+    ctx.fillStyle='#1a0a2e'; ctx.fillRect(0,0,800,500);
+    for(let i=0;i<60;i++){
+      ctx.fillStyle=`rgba(255,255,255,${(Math.sin(t*2+i)*0.5+0.5)*0.55})`;
+      ctx.fillRect((Math.sin(i*127.3)*0.5+0.5)*800,(Math.sin(i*93.7)*0.5+0.5)*500,2,2);
+    }
+    cam.x=0;
+    drawPip(340+Math.sin(t)*30,360,1,Math.floor(t*4),0);
+    drawWM({ox:450,oy:350});
+    requestAnimationFrame(gameLoop); return;
+  }
+
+  if(LEVELS.length===0||!LEVELS[lvlIdx]){ requestAnimationFrame(gameLoop); return; }
+  const lv=LEVELS[lvlIdx];
+
+  if(gState==='playing'){
     drawBg(lv);
     lv.plats.forEach(p=>drawPlat(p));
     lv.laundry.forEach(l=>drawLaundry(l));
@@ -717,11 +754,14 @@ function gameLoop(){
     drawWM(lv.wm);
     lv.cats.forEach(c=>drawCat(c));
     drawPip(PL.x,PL.y,PL.facing,Math.floor(PL.af),invincible);
-    updatePlayer(lv); updateCats(lv.cats); checkCollisions(lv);
     updateHUD(); tickMsg();
+    updatePlayer(lv);
+    updateCats(lv.cats);
+    checkCollisions(lv);
   } else if(gState==='celebrating'){
     drawCelebration(); tickMsg();
   }
+  // 'gameover' and 'overlay': HTML overlay is visible, canvas stays frozen — no update needed
   requestAnimationFrame(gameLoop);
 }
 requestAnimationFrame(gameLoop);
