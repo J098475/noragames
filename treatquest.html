@@ -167,85 +167,382 @@ function resetP(sx, sy) {
 const GP = h => GY - h;
 
 const POWERUP_DEFS = [
-  [ // Level 1
-    { x:480,  y:GP(44), type:'speed' },
-    { x:1160, y:GP(36), type:'life'  },
+  [ // L1 Living Room
+    { x: 480,  y:GP(44), type:'speed' },
+    { x:2000,  y:GP(30), type:'life'  },
+    { x:3100,  y:GP(30), type:'speed' },
   ],
-  [ // Level 2
-    { x:620,  y:GP(70), type:'speed' },
-    { x:1310, y:GP(36), type:'life'  },
-    { x:1780, y:GP(36), type:'speed' },
+  [ // L2 Kitchen
+    { x: 700,  y:GP(70), type:'speed' },
+    { x:1900,  y:GP(30), type:'life'  },
+    { x:2900,  y:GP(30), type:'speed' },
+    { x:3380,  y:GP(30), type:'life'  },
+  ],
+  [ // L3 Study
+    { x: 550,  y:GP(30), type:'speed' },
+    { x:1700,  y:GP(30), type:'life'  },
+    { x:2600,  y:GP(30), type:'speed' },
+    { x:3400,  y:GP(30), type:'life'  },
+  ],
+  [ // L4 Bedroom
+    { x: 800,  y:GP(30), type:'speed' },
+    { x:1800,  y:GP(30), type:'life'  },
+    { x:2700,  y:GP(30), type:'speed' },
+    { x:3380,  y:GP(30), type:'life'  },
+  ],
+  [ // L5 Basement
+    { x: 450,  y:GP(30), type:'speed' },
+    { x:1600,  y:GP(30), type:'life'  },
+    { x:2500,  y:GP(30), type:'speed' },
+    { x:3400,  y:GP(30), type:'life'  },
+  ],
+  [ // L6 Garden – final level, more generous
+    { x: 700,  y:GP(30), type:'speed' },
+    { x:1500,  y:GP(30), type:'life'  },
+    { x:2500,  y:GP(30), type:'speed' },
+    { x:3200,  y:GP(30), type:'life'  },
   ],
 ];
 
 const LEVELS = [
-  // ── LEVEL 1: Living Room ──────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // LEVEL 1 – Living Room  (gentle intro, 3500px)
+  // Learn: jump furniture, cat-tree shelves, first crawl
+  // ══════════════════════════════════════════════════════════════
   {
-    width: 1750,
-    playerStart: { x:48, y:GY },
-    treat: { x:1670, y:GP(30) },
-    platforms: [
-      { x:190,  y:GP(42),  w:108, h:42,  type:'sofa' },
-      { x:390,  y:GP(28),  w:80,  h:28,  type:'table' },
-      // cat tree (decorative post + collidable shelves)
-      { x:570,  y:GP(155), w:34,  h:155, type:'cattree', nc:true },
-      { x:549,  y:GP(58),  w:76,  h:12,  type:'shelf' },
-      { x:537,  y:GP(108), w:100, h:12,  type:'shelf' },
-      { x:549,  y:GP(158), w:76,  h:12,  type:'shelf' },
-      // low dresser — ceiling slab, must crawl (h=10, bottom at GY-16, crawl top at GY-13 = clears)
-      { x:720,  y:GP(26),  w:158, h:10,  type:'lowfurniture' },
-      // short bookshelf — 42px, easily jumpable
-      { x:955,  y:GP(42),  w:44,  h:42,  type:'bookshelf' },
-      // scratching post
-      { x:1115, y:GP(88),  w:18,  h:88,  type:'scratchpost', nc:true },
-      { x:1102, y:GP(96),  w:44,  h:12,  type:'shelf' },
-      { x:1310, y:GP(50),  w:98,  h:50,  type:'armchair' },
-      { x:1490, y:GP(28),  w:78,  h:28,  type:'table' },
+    width:3500, playerStart:{x:48,y:GY}, treat:{x:3420,y:GP(30)},
+    platforms:[
+      {x: 180, y:GP( 42), w:110, h: 42, type:'sofa'},
+      {x: 390, y:GP( 28), w: 80, h: 28, type:'table'},
+      // cat tree 1
+      {x: 570, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x: 549, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x: 537, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x: 549, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // low dresser (crawl: exit=878)
+      {x: 720, y:GP( 26), w:158, h: 10, type:'lowfurniture'},
+      {x: 960, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      {x:1120, y:GP( 50), w: 98, h: 50, type:'armchair'},
+      {x:1340, y:GP( 88), w: 18, h: 88, type:'scratchpost', nc:true},
+      {x:1327, y:GP( 96), w: 44, h: 12, type:'shelf'},
+      {x:1530, y:GP( 28), w: 80, h: 28, type:'table'},
+      {x:1720, y:GP( 42), w:110, h: 42, type:'sofa'},
+      // low side table (crawl: exit=2080)
+      {x:1940, y:GP( 26), w:140, h: 10, type:'lowfurniture'},
+      // cat tree 2
+      {x:2300, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x:2279, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x:2267, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x:2279, y:GP(158), w: 76, h: 12, type:'shelf'},
+      {x:2520, y:GP( 28), w: 80, h: 28, type:'table'},
+      {x:2700, y:GP( 50), w: 98, h: 50, type:'armchair'},
+      // low ottoman (crawl: exit=2920)
+      {x:2780, y:GP( 26), w:140, h: 10, type:'lowfurniture'},
+      {x:3040, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      {x:3180, y:GP( 88), w: 18, h: 88, type:'scratchpost', nc:true},
+      {x:3167, y:GP( 96), w: 44, h: 12, type:'shelf'},
+      {x:3320, y:GP( 28), w: 80, h: 28, type:'table'},
     ],
-    litterboxes: [
-      { x:328,  y:GP(24), w:44, h:24 },
-      { x:1050, y:GP(24), w:44, h:24 },  // safe: 172px after crawl exit
-      { x:1240, y:GP(24), w:44, h:24 },
+    litterboxes:[
+      {x: 328, y:GP(24), w:44, h:24},
+      {x: 870, y:GP(24), w:44, h:24},  // before crawl (crawl at 720, litter ends 914 < 720 ok from right)
+      {x:1220, y:GP(24), w:44, h:24},
+      {x:1660, y:GP(24), w:44, h:24},
+      {x:2200, y:GP(24), w:44, h:24},  // 120px after crawl exit 2080 ✓
+      {x:2490, y:GP(24), w:44, h:24},
+      {x:3040, y:GP(24), w:44, h:24},  // 120px after crawl exit 2920 ✓
+      {x:3250, y:GP(24), w:44, h:24},
     ],
   },
 
-  // ── LEVEL 2: Kitchen & Hallway ────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // LEVEL 2 – Kitchen  (counters, multiple crawl sections, 3500px)
+  // ══════════════════════════════════════════════════════════════
   {
-    width: 2150,
-    playerStart: { x:48, y:GY },
-    treat: { x:2070, y:GP(30) },
-    platforms: [
-      { x:155,  y:GP(18),  w:80,  h:18,  type:'table' },
+    width:3500, playerStart:{x:48,y:GY}, treat:{x:3420,y:GP(30)},
+    platforms:[
+      {x: 155, y:GP( 18), w: 80, h: 18, type:'table'},
       // cat tree 1
-      { x:308,  y:GP(148), w:34,  h:148, type:'cattree', nc:true },
-      { x:287,  y:GP(58),  w:76,  h:12,  type:'shelf' },
-      { x:275,  y:GP(108), w:100, h:12,  type:'shelf' },
-      { x:287,  y:GP(158), w:76,  h:12,  type:'shelf' },
-      // counters
-      { x:470,  y:GP(54),  w:128, h:54,  type:'counter' },
-      { x:660,  y:GP(54),  w:128, h:54,  type:'counter' },
-      { x:468,  y:GP(116), w:322, h:12,  type:'shelf' },
-      // low microwave stand — crawl
-      { x:850,  y:GP(26),  w:138, h:10,  type:'lowfurniture' },
-      { x:1060, y:GP(42),  w:108, h:42,  type:'table' },
-      // scratching post 2
-      { x:1242, y:GP(96),  w:18,  h:96,  type:'scratchpost', nc:true },
-      { x:1230, y:GP(104), w:42,  h:12,  type:'shelf' },
-      // low ottoman — crawl
-      { x:1365, y:GP(26),  w:118, h:10,  type:'lowfurniture' },
-      { x:1562, y:GP(42),  w:44,  h:42,  type:'bookshelf' },
+      {x: 308, y:GP(148), w: 34, h:148, type:'cattree', nc:true},
+      {x: 287, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x: 275, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x: 287, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // counter pair 1
+      {x: 470, y:GP( 54), w:128, h: 54, type:'counter'},
+      {x: 660, y:GP( 54), w:128, h: 54, type:'counter'},
+      {x: 468, y:GP(116), w:322, h: 12, type:'shelf'},
+      // low microwave (crawl: exit=988)
+      {x: 850, y:GP( 26), w:138, h: 10, type:'lowfurniture'},
+      {x:1060, y:GP( 42), w:108, h: 42, type:'table'},
+      {x:1242, y:GP( 96), w: 18, h: 96, type:'scratchpost', nc:true},
+      {x:1230, y:GP(104), w: 42, h: 12, type:'shelf'},
+      // low ottoman (crawl: exit=1483)
+      {x:1365, y:GP( 26), w:118, h: 10, type:'lowfurniture'},
+      {x:1562, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
       // cat tree 2
-      { x:1700, y:GP(148), w:34,  h:148, type:'cattree', nc:true },
-      { x:1679, y:GP(58),  w:76,  h:12,  type:'shelf' },
-      { x:1667, y:GP(108), w:100, h:12,  type:'shelf' },
-      { x:1875, y:GP(50),  w:98,  h:50,  type:'armchair' },
+      {x:1700, y:GP(148), w: 34, h:148, type:'cattree', nc:true},
+      {x:1679, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x:1667, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x:1875, y:GP( 50), w: 98, h: 50, type:'armchair'},
+      // counter pair 2
+      {x:2080, y:GP( 54), w:128, h: 54, type:'counter'},
+      {x:2280, y:GP( 54), w:128, h: 54, type:'counter'},
+      {x:2078, y:GP(116), w:332, h: 12, type:'shelf'},
+      // low fridge gap (crawl: exit=2628)
+      {x:2480, y:GP( 26), w:148, h: 10, type:'lowfurniture'},
+      {x:2800, y:GP( 42), w:108, h: 42, type:'table'},
+      // cat tree 3
+      {x:2990, y:GP(148), w: 34, h:148, type:'cattree', nc:true},
+      {x:2969, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x:2957, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x:2969, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // low pantry (crawl: exit=3238)
+      {x:3100, y:GP( 26), w:138, h: 10, type:'lowfurniture'},
+      {x:3350, y:GP( 42), w:110, h: 42, type:'sofa'},
     ],
-    litterboxes: [
-      { x:258,  y:GP(24), w:44, h:24 },
-      { x:410,  y:GP(24), w:44, h:24 },  // safe: 396px before crawl entry
-      { x:1185, y:GP(24), w:44, h:24 },  // safe: 197px after crawl exit
-      { x:1640, y:GP(24), w:44, h:24 },  // safe: 157px after crawl exit
-      { x:1828, y:GP(24), w:44, h:24 },
+    litterboxes:[
+      {x: 258, y:GP(24), w:44, h:24},
+      {x: 415, y:GP(24), w:44, h:24},
+      {x:1150, y:GP(24), w:44, h:24},  // 162px after crawl exit 988 ✓
+      {x:1640, y:GP(24), w:44, h:24},  // 157px after crawl exit 1483 ✓
+      {x:2020, y:GP(24), w:44, h:24},
+      {x:2750, y:GP(24), w:44, h:24},  // 122px after crawl exit 2628 ✓
+      {x:2870, y:GP(24), w:44, h:24},
+      {x:3370, y:GP(24), w:44, h:24},  // 132px after crawl exit 3238 ✓
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // LEVEL 3 – Study / Home Office  (bookshelves galore, 3500px)
+  // New: bookshelf clusters, tighter gaps between hazards
+  // ══════════════════════════════════════════════════════════════
+  {
+    width:3500, playerStart:{x:48,y:GY}, treat:{x:3420,y:GP(30)},
+    platforms:[
+      // desk 1
+      {x: 160, y:GP( 54), w:130, h: 54, type:'counter'},
+      {x: 158, y:GP(114), w:134, h: 12, type:'shelf'},
+      // bookshelf pair
+      {x: 390, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      {x: 500, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      // cat tree 1
+      {x: 640, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x: 619, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x: 607, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x: 619, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // low file cabinet (crawl: exit=930)
+      {x: 780, y:GP( 26), w:150, h: 10, type:'lowfurniture'},
+      {x:1040, y:GP( 50), w: 98, h: 50, type:'armchair'},
+      {x:1220, y:GP( 28), w: 78, h: 28, type:'table'},
+      // bookshelf trio
+      {x:1400, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      {x:1510, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      {x:1620, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      {x:1790, y:GP( 88), w: 18, h: 88, type:'scratchpost', nc:true},
+      {x:1777, y:GP( 96), w: 44, h: 12, type:'shelf'},
+      // low printer stand (crawl: exit=1940)
+      {x:1800, y:GP( 26), w:140, h: 10, type:'lowfurniture'},
+      // desk 2
+      {x:2080, y:GP( 54), w:130, h: 54, type:'counter'},
+      {x:2078, y:GP(114), w:134, h: 12, type:'shelf'},
+      // cat tree 2
+      {x:2320, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x:2299, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x:2287, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x:2299, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // bookshelf row
+      {x:2540, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      {x:2650, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      {x:2760, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      {x:2920, y:GP( 42), w:110, h: 42, type:'sofa'},
+      // low cable box (crawl: exit=3210)
+      {x:3080, y:GP( 26), w:130, h: 10, type:'lowfurniture'},
+      // final desk
+      {x:3330, y:GP( 54), w:100, h: 54, type:'counter'},
+    ],
+    litterboxes:[
+      {x: 290, y:GP(24), w:44, h:24},
+      {x: 710, y:GP(24), w:44, h:24},
+      {x:1040, y:GP(24), w:44, h:24},  // 110px after crawl exit 930 ✓
+      {x:1310, y:GP(24), w:44, h:24},
+      {x:1580, y:GP(24), w:44, h:24},
+      {x:2100, y:GP(24), w:44, h:24},  // 160px after crawl exit 1940 ✓
+      {x:2450, y:GP(24), w:44, h:24},
+      {x:3330, y:GP(24), w:44, h:24},  // 120px after crawl exit 3210 ✓
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // LEVEL 4 – Bedroom  (wardrobes, long crawls, 3500px)
+  // New: long bed-frame crawls, wardrobe stacks
+  // ══════════════════════════════════════════════════════════════
+  {
+    width:3500, playerStart:{x:48,y:GY}, treat:{x:3420,y:GP(30)},
+    platforms:[
+      {x: 160, y:GP( 36), w: 72, h: 36, type:'table'},
+      // wardrobe 1 (tall counter + shelf)
+      {x: 360, y:GP( 80), w: 80, h: 80, type:'counter'},
+      {x: 358, y:GP(130), w: 84, h: 12, type:'shelf'},
+      // cat tree 1
+      {x: 560, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x: 539, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x: 527, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x: 539, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // long bed frame (crawl: exit=930)
+      {x: 730, y:GP( 26), w:200, h: 10, type:'lowfurniture'},
+      {x:1060, y:GP( 42), w:110, h: 42, type:'sofa'},
+      {x:1270, y:GP( 88), w: 18, h: 88, type:'scratchpost', nc:true},
+      {x:1257, y:GP( 96), w: 44, h: 12, type:'shelf'},
+      // low dresser (crawl: exit=1570)
+      {x:1420, y:GP( 26), w:150, h: 10, type:'lowfurniture'},
+      // wardrobe 2
+      {x:1680, y:GP( 80), w: 80, h: 80, type:'counter'},
+      {x:1678, y:GP(130), w: 84, h: 12, type:'shelf'},
+      // cat tree 2
+      {x:1900, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x:1879, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x:1867, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x:1879, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // long bed frame 2 (crawl: exit=2280)
+      {x:2080, y:GP( 26), w:200, h: 10, type:'lowfurniture'},
+      {x:2400, y:GP( 50), w: 98, h: 50, type:'armchair'},
+      {x:2590, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      // low toy chest (crawl: exit=2840)
+      {x:2700, y:GP( 26), w:140, h: 10, type:'lowfurniture'},
+      // cat tree 3
+      {x:3000, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x:2979, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x:2967, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x:2979, y:GP(158), w: 76, h: 12, type:'shelf'},
+      {x:3200, y:GP( 36), w: 72, h: 36, type:'table'},
+      {x:3330, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+    ],
+    litterboxes:[
+      {x: 290, y:GP(24), w:44, h:24},
+      {x: 610, y:GP(24), w:44, h:24},
+      {x:1060, y:GP(24), w:44, h:24},  // 130px after crawl exit 930 ✓
+      {x:1210, y:GP(24), w:44, h:24},
+      {x:1680, y:GP(24), w:44, h:24},  // 110px after crawl exit 1570 ✓
+      {x:2000, y:GP(24), w:44, h:24},
+      {x:2450, y:GP(24), w:44, h:24},  // 170px after crawl exit 2280 ✓
+      {x:2960, y:GP(24), w:44, h:24},  // 120px after crawl exit 2840 ✓
+      {x:3150, y:GP(24), w:44, h:24},
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // LEVEL 5 – Basement / Laundry  (hardest crawls, 3500px)
+  // New: back-to-back crawl sections with no litter between them
+  // ══════════════════════════════════════════════════════════════
+  {
+    width:3500, playerStart:{x:48,y:GY}, treat:{x:3420,y:GP(30)},
+    platforms:[
+      // workbench 1
+      {x: 160, y:GP( 54), w:130, h: 54, type:'counter'},
+      {x: 158, y:GP(114), w:134, h: 12, type:'shelf'},
+      // cat tree 1
+      {x: 410, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x: 389, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x: 377, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x: 389, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // washer (crawl: exit=730)
+      {x: 600, y:GP( 26), w:130, h: 10, type:'lowfurniture'},
+      // dryer right after (crawl: exit=930) — back-to-back!
+      {x: 800, y:GP( 26), w:130, h: 10, type:'lowfurniture'},
+      {x:1060, y:GP( 42), w:100, h: 42, type:'table'},
+      {x:1260, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      {x:1430, y:GP( 88), w: 18, h: 88, type:'scratchpost', nc:true},
+      {x:1417, y:GP( 96), w: 44, h: 12, type:'shelf'},
+      // low shelf unit (crawl: exit=1730)
+      {x:1580, y:GP( 26), w:150, h: 10, type:'lowfurniture'},
+      // workbench 2
+      {x:1900, y:GP( 54), w:130, h: 54, type:'counter'},
+      {x:1898, y:GP(114), w:134, h: 12, type:'shelf'},
+      // cat tree 2
+      {x:2160, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x:2139, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x:2127, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x:2139, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // chest 1 (crawl: exit=2420)
+      {x:2290, y:GP( 26), w:130, h: 10, type:'lowfurniture'},
+      // chest 2 (crawl: exit=2620) — back-to-back again!
+      {x:2490, y:GP( 26), w:130, h: 10, type:'lowfurniture'},
+      {x:2780, y:GP( 50), w: 98, h: 50, type:'armchair'},
+      // cat tree 3
+      {x:3000, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x:2979, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x:2967, y:GP(108), w:100, h: 12, type:'shelf'},
+      // final long crawl (crawl: exit=3270)
+      {x:3130, y:GP( 26), w:140, h: 10, type:'lowfurniture'},
+      {x:3380, y:GP( 36), w: 80, h: 36, type:'table'},
+    ],
+    litterboxes:[
+      {x: 300, y:GP(24), w:44, h:24},
+      // no litter between back-to-back crawls (730..930) — intentional
+      {x:1060, y:GP(24), w:44, h:24},  // 130px after back-to-back exit 930 ✓
+      {x:1180, y:GP(24), w:44, h:24},
+      {x:1490, y:GP(24), w:44, h:24},
+      {x:1900, y:GP(24), w:44, h:24},  // 170px after crawl exit 1730 ✓
+      {x:2230, y:GP(24), w:44, h:24},
+      // no litter between back-to-back crawls (2420..2620) — intentional
+      {x:2750, y:GP(24), w:44, h:24},  // 130px after back-to-back exit 2620 ✓
+      {x:3390, y:GP(24), w:44, h:24},  // 120px after crawl exit 3270 ✓
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // LEVEL 6 – Back Garden  (final boss level, 3500px)
+  // Everything at once: crawls, clusters, cat trees, dense litters
+  // ══════════════════════════════════════════════════════════════
+  {
+    width:3500, playerStart:{x:48,y:GY}, treat:{x:3420,y:GP(30)},
+    platforms:[
+      // garden bench
+      {x: 160, y:GP( 42), w:110, h: 42, type:'sofa'},
+      // cat tree 1 — rewarding early boost
+      {x: 370, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x: 349, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x: 337, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x: 349, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // low garden box (crawl: exit=710)
+      {x: 570, y:GP( 26), w:140, h: 10, type:'lowfurniture'},
+      // raised planter beds (counters)
+      {x: 880, y:GP( 54), w:120, h: 54, type:'counter'},
+      {x:1070, y:GP( 54), w:120, h: 54, type:'counter'},
+      {x: 878, y:GP(116), w:316, h: 12, type:'shelf'},
+      {x:1290, y:GP( 88), w: 18, h: 88, type:'scratchpost', nc:true},
+      {x:1277, y:GP( 96), w: 44, h: 12, type:'shelf'},
+      // low tool box (crawl: exit=1560)
+      {x:1420, y:GP( 26), w:140, h: 10, type:'lowfurniture'},
+      // garden chair
+      {x:1720, y:GP( 50), w: 98, h: 50, type:'armchair'},
+      {x:1920, y:GP( 42), w: 44, h: 42, type:'bookshelf'},
+      // cat tree 2
+      {x:2060, y:GP(155), w: 34, h:155, type:'cattree', nc:true},
+      {x:2039, y:GP( 58), w: 76, h: 12, type:'shelf'},
+      {x:2027, y:GP(108), w:100, h: 12, type:'shelf'},
+      {x:2039, y:GP(158), w: 76, h: 12, type:'shelf'},
+      // low garden crate (crawl: exit=2420)
+      {x:2280, y:GP( 26), w:140, h: 10, type:'lowfurniture'},
+      // planter pair
+      {x:2600, y:GP( 54), w:120, h: 54, type:'counter'},
+      {x:2790, y:GP( 54), w:120, h: 54, type:'counter'},
+      {x:2598, y:GP(116), w:316, h: 12, type:'shelf'},
+      {x:3030, y:GP( 88), w: 18, h: 88, type:'scratchpost', nc:true},
+      {x:3017, y:GP( 96), w: 44, h: 12, type:'shelf'},
+      // final long gate crawl (crawl: exit=3290)
+      {x:3130, y:GP( 26), w:160, h: 10, type:'lowfurniture'},
+      {x:3370, y:GP( 42), w:110, h: 42, type:'sofa'},
+    ],
+    litterboxes:[
+      {x: 290, y:GP(24), w:44, h:24},
+      {x: 880, y:GP(24), w:44, h:24},  // 170px after crawl exit 710 ✓
+      {x:1210, y:GP(24), w:44, h:24},
+      {x:1700, y:GP(24), w:44, h:24},  // 140px after crawl exit 1560 ✓
+      {x:2000, y:GP(24), w:44, h:24},
+      {x:2580, y:GP(24), w:44, h:24},  // 160px after crawl exit 2420 ✓
+      {x:2920, y:GP(24), w:44, h:24},
+      {x:3060, y:GP(24), w:44, h:24},  // before crawl entry 3130 (70px gap before, fine) ✓
     ],
   },
 ];
@@ -398,7 +695,7 @@ function collect(){
   gs='transitioning'; score+=200+lvlNum*100; updateHUD(); sfxTreat();
   burst(cfg.treat.x+14,cfg.treat.y+14,'#ffcc00',40);
   burst(P.x+P.w/2,P.y+P.h/2,'#ffffee',20);
-  if(lvlNum<2){
+  if(lvlNum<6){
     setTimeout(()=>showOv('GOOD BOY GUS!',['Treat found! On to the next room!','Score: '+score],'CONTINUE',()=>{lvlNum++;startLevel();}),900);
   } else {
     sfxWin();
