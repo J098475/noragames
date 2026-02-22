@@ -505,12 +505,34 @@ function drawLitter(lb){
 // ================================================================
 function drawTreat(tr){
   const x=sx(tr.x), bob=Math.sin(frame*.08)*5, y=tr.y+bob;
-  ctx.save(); ctx.shadowColor='#ffcc00'; ctx.shadowBlur=22;
+  // Treat glow — layered rects, no shadowBlur to avoid bleed artefacts
+  ctx.fillStyle='rgba(255,204,0,0.15)'; ctx.fillRect(x-6,y-6,40,40);
+  ctx.fillStyle='rgba(255,204,0,0.10)'; ctx.fillRect(x-10,y-10,48,48);
   r(x+8,y,12,28,'#FFCC00'); r(x,y+8,28,12,'#FFCC00');
   r(x+5,y+5,18,18,'#FFE566'); r(x+10,y+10,8,8,'#FFF0AA');
-  ctx.restore();
   ctx.fillStyle='#fff'; ctx.font='9px serif';
   ['\u2726','\u2B51','\u2726'].forEach((s,i)=>{ const a=frame*.06+i*2.09; ctx.fillText(s,x+14+Math.cos(a)*20,y+14+Math.sin(a)*11); });
+}
+
+// ================================================================
+//  DRAW BOOST GLOW  (drawn BEHIND Gus so it never makes a square on top)
+// ================================================================
+function drawBoostGlow(){
+  if(!P.boosted) return;
+  const x=Math.round(P.x-cam.x), y=Math.round(P.y);
+  const w=P.w, h=P.h;
+  // Draw several expanding semi-transparent orange rectangles to fake a glow
+  // No shadowBlur — that's what caused the square artefact
+  const colours=['rgba(255,136,0,0.18)','rgba(255,136,0,0.12)','rgba(255,136,0,0.07)'];
+  colours.forEach((c,i)=>{
+    const pad=(i+1)*4;
+    ctx.fillStyle=c;
+    ctx.fillRect(x-pad, y-pad, w+pad*2, h+pad*2);
+  });
+  // Crisp orange border — no shadow, no blur
+  ctx.strokeStyle='rgba(255,136,0,0.8)';
+  ctx.lineWidth=2;
+  ctx.strokeRect(x-2, y-2, w+4, h+4);
 }
 
 // ================================================================
@@ -660,14 +682,6 @@ function drawGus(){
     ctx.lineTo(wnx+f*10,y+1); ctx.stroke();
   }
 
-  // speed boost glow (orange outline)
-  if(P.boosted){
-    ctx.save(); ctx.shadowColor='#ff8800'; ctx.shadowBlur=18;
-    ctx.strokeStyle='#ff8800'; ctx.lineWidth=2;
-    ctx.strokeRect(x-2,y-2,P.w+4,P.h+4);
-    ctx.restore();
-  }
-
   ctx.globalAlpha=1;
 }
 
@@ -680,7 +694,7 @@ function drawPowerups(){
     const px2=Math.round(pu.x-cam.x), py2=pu.y;
     const bob=Math.sin(frame*0.09)*3;
     if(pu.type==='speed'){
-      ctx.save(); ctx.shadowColor='#44aaff'; ctx.shadowBlur=14;
+      ctx.save();
       r(px2+2,py2+6+bob,18,10,'#5BB8FF');
       r(px2+4,py2+4+bob,14,14,'#3A9FE8');
       r(px2+6,py2+6+bob,10,10,'#88CCFF');
@@ -693,7 +707,7 @@ function drawPowerups(){
       ctx.fillStyle='#44aaff'; ctx.font='bold 7px monospace';
       ctx.fillText('SPEEDY!',px2,py2-5+bob);
     } else {
-      ctx.save(); ctx.shadowColor='#ff44aa'; ctx.shadowBlur=14;
+      ctx.save();
       r(px2+2,py2+2+bob,20,20,'#FF6EC7');
       r(px2+4,py2+4+bob,16,16,'#FF44AA');
       r(px2+7,py2+7+bob,10,10,'#FF99DD');
@@ -788,6 +802,7 @@ function draw(){
   if(tr.x-cam.x>-40&&tr.x-cam.x<W+40) drawTreat(tr);
   drawPowerups();
   drawParts();
+  drawBoostGlow();
   drawGus();
   drawHints();
   drawArrow();
@@ -840,22 +855,94 @@ document.addEventListener('keyup',e=>keys[e.key]=false);
 // Mobile controls
 (function(){
   const mc=document.createElement('div');
-  mc.style.cssText='display:flex;gap:8px;margin-top:10px;justify-content:center;';
-  mc.innerHTML=`<style>.mb{width:55px;height:55px;background:#ffcc00;border:none;border-radius:4px;font-size:20px;cursor:pointer;box-shadow:3px 3px #ff4400;color:#1a0a2e;touch-action:manipulation;user-select:none;font-family:monospace;font-weight:bold;}.mb:active{transform:translate(2px,2px);box-shadow:1px 1px #ff4400;}</style>
-  <button class="mb" id="mb-l">&#9664;</button>
-  <button class="mb" id="mb-d" style="background:#ffaa00">&#9660;</button>
-  <button class="mb" id="mb-j" style="background:#ff9900">&#9650;</button>
-  <button class="mb" id="mb-r">&#9654;</button>`;
+  // Two-thumb layout: d-pad left, action buttons right
+  mc.style.cssText=[
+    'display:flex',
+    'justify-content:space-between',
+    'align-items:flex-end',
+    'margin-top:10px',
+    'width:648px',   // matches canvas+border width
+    'padding:0 8px',
+    'box-sizing:border-box',
+  ].join(';');
+
+  mc.innerHTML=`
+  <style>
+    /* Shared button base */
+    .mb {
+      width:60px; height:60px;
+      border:none; border-radius:8px;
+      cursor:pointer;
+      box-shadow:3px 3px #ff4400;
+      color:#1a0a2e;
+      touch-action:manipulation;
+      /* Prevent text/emoji selection on long-press */
+      user-select:none;
+      -webkit-user-select:none;
+      -webkit-touch-callout:none;
+      /* Use canvas-drawn arrows instead of text so there's nothing to select */
+      font-size:0;           /* hide any fallback text */
+      background-repeat:no-repeat;
+      background-position:center;
+      background-size:28px 28px;
+    }
+    .mb:active { transform:translate(2px,2px); box-shadow:1px 1px #ff4400; }
+
+    /* Left cluster: ◀ and ▶ side by side */
+    #dpad { display:flex; gap:8px; }
+
+    /* Right cluster: ▲ on top, ▼ below */
+    #apad { display:flex; flex-direction:column; gap:8px; }
+  </style>
+
+  <!-- LEFT: movement -->
+  <div id="dpad">
+    <button class="mb" id="mb-l" style="background:#ffcc00;"
+      aria-label="Left"></button>
+    <button class="mb" id="mb-r" style="background:#ffcc00;"
+      aria-label="Right"></button>
+  </div>
+
+  <!-- RIGHT: jump / duck -->
+  <div id="apad">
+    <button class="mb" id="mb-j" style="background:#ff9900;"
+      aria-label="Jump"></button>
+    <button class="mb" id="mb-d" style="background:#ffaa00;"
+      aria-label="Duck"></button>
+  </div>`;
+
   document.getElementById('wrap').appendChild(mc);
   if(!('ontouchstart' in window)) mc.style.display='none';
+
+  // Draw arrows onto buttons via canvas so there is zero selectable text
+  const arrows = {
+    'mb-l': (ctx,w,h)=>{ ctx.beginPath(); ctx.moveTo(w*.65,h*.2); ctx.lineTo(w*.25,h*.5); ctx.lineTo(w*.65,h*.8); ctx.fill(); },
+    'mb-r': (ctx,w,h)=>{ ctx.beginPath(); ctx.moveTo(w*.35,h*.2); ctx.lineTo(w*.75,h*.5); ctx.lineTo(w*.35,h*.8); ctx.fill(); },
+    'mb-j': (ctx,w,h)=>{ ctx.beginPath(); ctx.moveTo(w*.5,h*.2); ctx.lineTo(w*.8,h*.75); ctx.lineTo(w*.2,h*.75); ctx.fill(); },
+    'mb-d': (ctx,w,h)=>{ ctx.beginPath(); ctx.moveTo(w*.5,h*.8); ctx.lineTo(w*.8,h*.25); ctx.lineTo(w*.2,h*.25); ctx.fill(); },
+  };
+  Object.keys(arrows).forEach(id=>{
+    const btn=document.getElementById(id);
+    const cv=document.createElement('canvas');
+    const dpr=window.devicePixelRatio||1;
+    cv.width=60*dpr; cv.height=60*dpr;
+    cv.style.cssText='position:absolute;top:0;left:0;width:60px;height:60px;pointer-events:none;';
+    btn.style.position='relative';
+    const cx=cv.getContext('2d');
+    cx.scale(dpr,dpr);
+    cx.fillStyle='rgba(0,0,0,0.5)';
+    arrows[id](cx,60,60);
+    btn.appendChild(cv);
+  });
+
   const map={'mb-l':'ArrowLeft','mb-r':'ArrowRight','mb-d':'ArrowDown','mb-j':'ArrowUp'};
   Object.keys(map).forEach(id=>{
     const el=document.getElementById(id),k=map[id];
     el.addEventListener('touchstart',e=>{e.preventDefault();keys[k]=true;},{passive:false});
     el.addEventListener('touchend',  e=>{e.preventDefault();keys[k]=false;},{passive:false});
     el.addEventListener('touchcancel',()=>keys[k]=false);
-    el.addEventListener('mousedown',()=>keys[k]=true);
-    el.addEventListener('mouseup',  ()=>keys[k]=false);
+    el.addEventListener('mousedown', e=>{e.preventDefault();keys[k]=true;});
+    el.addEventListener('mouseup',   ()=>keys[k]=false);
     el.addEventListener('mouseleave',()=>keys[k]=false);
   });
 })();
